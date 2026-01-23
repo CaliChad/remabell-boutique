@@ -1,1 +1,57 @@
 @import "tailwindcss";
+
+:root {
+    --cream: #FAF8F5;
+    --sage: #E8EDE8;
+    --charcoal: #2C2C2C;
+    --gray-warm: #6B6B6B;
+    --gold: #C9B98F;
+    --teal: #2C5F5D;
+    --teal-dark: #1F4A48;
+    --whatsapp: #25D366;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    background: var(--cream);
+    color: var(--charcoal);
+    font-family: 'Poppins', system-ui, sans-serif;
+}
+
+.font-serif {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+.card-lift {
+    transition: all 0.3s ease;
+}
+
+.card-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.img-zoom {
+    transition: transform 0.7s ease;
+}
+
+.group:hover .img-zoom {
+    transform: scale(1.05);
+}
+
+.btn-luxury {
+    transition: all 0.3s ease;
+}
+
+.btn-luxury:hover {
+    transform: scale(1.02);
+}
