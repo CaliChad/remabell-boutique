@@ -1,22 +1,10 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { getPublicKey } from '../lib/paystack';
+import { useEffect, useState, useCallback } from 'react';
 
 /**
  * PaystackPopup Component
  * Renders an inline Paystack payment popup
- * 
- * @param {Object} props
- * @param {string} props.email - Customer email
- * @param {number} props.amount - Amount in kobo
- * @param {string} props.reference - Unique transaction reference
- * @param {Object} props.metadata - Additional transaction metadata
- * @param {Function} props.onSuccess - Callback on successful payment
- * @param {Function} props.onClose - Callback when popup is closed
- * @param {boolean} props.disabled - Disable the button
- * @param {string} props.buttonText - Custom button text
- * @param {string} props.className - Additional CSS classes
  */
 export default function PaystackPopup({
     email,
@@ -29,77 +17,132 @@ export default function PaystackPopup({
     buttonText = 'Pay Now',
     className = ''
 }) {
-    const paystackRef = useRef(null);
+    const [scriptLoaded, setScriptLoaded] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
 
+    // Load Paystack script
     useEffect(() => {
-        // Dynamically load Paystack inline script
-        const loadPaystack = async () => {
-            if (typeof window !== 'undefined' && !window.PaystackPop) {
-                const script = document.createElement('script');
-                script.src = 'https://js.paystack.co/v2/inline.js';
-                script.async = true;
-                document.body.appendChild(script);
-            }
+        // Check if already loaded
+        if (window.PaystackPop) {
+            setScriptLoaded(true);
+            return;
+        }
+
+        // Check if script tag already exists
+        const existingScript = document.querySelector('script[src*="paystack.co"]');
+        if (existingScript) {
+            existingScript.addEventListener('load', () => setScriptLoaded(true));
+            return;
+        }
+
+        // Create and load script
+        const script = document.createElement('script');
+        script.src = 'https://js.paystack.co/v2/inline.js';
+        script.async = true;
+        script.onload = () => {
+            console.log('✅ Paystack script loaded');
+            setScriptLoaded(true);
         };
-        loadPaystack();
+        script.onerror = () => {
+            console.error('❌ Failed to load Paystack script');
+        };
+        document.head.appendChild(script);
+
+        return () => {
+            // Cleanup not needed as we want script to persist
+        };
     }, []);
 
-    const handlePayment = () => {
-        if (typeof window === 'undefined' || !window.PaystackPop) {
-            console.error('Paystack not loaded');
+    const handlePayment = useCallback(() => {
+        console.log('🔵 Payment button clicked');
+        console.log('   Email:', email);
+        console.log('   Amount (kobo):', amount);
+        console.log('   Reference:', reference);
+        console.log('   Script loaded:', scriptLoaded);
+        console.log('   PaystackPop available:', !!window.PaystackPop);
+
+        // Validation
+        if (!email || email === 'customer@example.com') {
+            alert('Please enter your email address first');
             return;
         }
 
-        const publicKey = getPublicKey();
+        if (!amount || amount <= 0) {
+            alert('Invalid cart amount');
+            return;
+        }
+
+        if (!scriptLoaded || !window.PaystackPop) {
+            console.error('❌ Paystack not ready');
+            alert('Payment system is loading. Please wait a moment and try again.');
+            return;
+        }
+
+        const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
+        console.log('   Public Key:', publicKey ? `${publicKey.substring(0, 15)}...` : 'MISSING');
+
         if (!publicKey) {
-            console.error('Paystack public key not configured');
+            console.error('❌ Paystack public key not configured');
+            alert('Payment configuration error. Please contact support.');
             return;
         }
 
-        const popup = new window.PaystackPop();
-        popup.newTransaction({
-            key: publicKey,
-            email,
-            amount,
-            currency: 'NGN',
-            ref: reference,
-            channels: ['card', 'bank', 'ussd', 'bank_transfer'],
-            label: 'Remabell Exquisite',
-            metadata: {
-                custom_fields: [
-                    {
-                        display_name: "Store",
-                        variable_name: "store",
-                        value: "Remabell Exquisite"
-                    },
-                    ...Object.entries(metadata).map(([key, value]) => ({
-                        display_name: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                        variable_name: key,
-                        value: String(value)
-                    }))
-                ]
-            },
-            onSuccess: (transaction) => {
-                console.log('Payment successful:', transaction);
-                if (onSuccess) onSuccess(transaction);
-            },
-            onCancel: () => {
-                console.log('Payment cancelled');
-                if (onClose) onClose();
-            }
-        });
-    };
+        setIsProcessing(true);
+
+        try {
+            const popup = new window.PaystackPop();
+            popup.newTransaction({
+                key: publicKey,
+                email: email,
+                amount: amount,
+                currency: 'NGN',
+                ref: reference,
+                channels: ['card', 'bank', 'ussd', 'bank_transfer'],
+                metadata: {
+                    custom_fields: [
+                        {
+                            display_name: "Store",
+                            variable_name: "store",
+                            value: "Remabell Exquisite"
+                        },
+                        ...Object.entries(metadata).map(([key, value]) => ({
+                            display_name: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                            variable_name: key,
+                            value: String(value)
+                        }))
+                    ]
+                },
+                onSuccess: (transaction) => {
+                    console.log('✅ Payment successful:', transaction);
+                    setIsProcessing(false);
+                    if (onSuccess) onSuccess(transaction);
+                },
+                onCancel: () => {
+                    console.log('⚠️ Payment cancelled');
+                    setIsProcessing(false);
+                    if (onClose) onClose();
+                }
+            });
+            console.log('✅ Paystack popup triggered');
+        } catch (error) {
+            console.error('❌ Paystack error:', error);
+            alert('Failed to open payment popup. Please try again.');
+            setIsProcessing(false);
+        }
+    }, [email, amount, reference, metadata, scriptLoaded, onSuccess, onClose]);
 
     const formatAmount = (kobo) => {
         const naira = kobo / 100;
         return `₦${naira.toLocaleString('en-NG')}`;
     };
 
+    const isDisabled = disabled || isProcessing || !email || email === 'customer@example.com';
+
     return (
         <button
-            ref={paystackRef}
+            type="button"
             onClick={handlePayment}
-            disabled={disabled}
+            disabled={isDisabled}
             className={className}
             style={{
                 display: 'flex',
@@ -108,14 +151,14 @@ export default function PaystackPopup({
                 gap: '12px',
                 width: '100%',
                 padding: '18px 32px',
-                background: disabled ? '#9CA3AF' : 'linear-gradient(135deg, #2C5F5D, #1F4A48)',
+                background: isDisabled ? '#9CA3AF' : 'linear-gradient(135deg, #2C5F5D, #1F4A48)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '12px',
                 fontSize: '16px',
                 fontWeight: '600',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                boxShadow: disabled ? 'none' : '0 4px 20px rgba(44,95,93,0.3)',
+                cursor: isDisabled ? 'not-allowed' : 'pointer',
+                boxShadow: isDisabled ? 'none' : '0 4px 20px rgba(44,95,93,0.3)',
                 transition: 'all 0.3s ease'
             }}
         >
@@ -124,7 +167,13 @@ export default function PaystackPopup({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
 
-            <span>{buttonText || `Pay ${formatAmount(amount)} Securely`}</span>
+            <span>
+                {isProcessing ? 'Opening Payment...' : (buttonText || `Pay ${formatAmount(amount)} Securely`)}
+            </span>
+
+            {!scriptLoaded && (
+                <span style={{ fontSize: '12px', opacity: 0.7 }}>(Loading...)</span>
+            )}
 
             {/* Card Icons */}
             <div style={{ display: 'flex', gap: '4px', marginLeft: '8px' }}>

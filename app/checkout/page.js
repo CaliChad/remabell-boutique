@@ -531,22 +531,20 @@ export default function CheckoutPage() {
                         </div>
 
                         {/* Paystack Payment Button */}
-                        <div onClick={() => handleProceedToPayment()}>
-                            <PaystackPopup
-                                email={customer.email || 'customer@example.com'}
-                                amount={totalKobo}
-                                reference={reference}
-                                metadata={{
-                                    customer_name: `${customer.firstName} ${customer.lastName}`,
-                                    phone: customer.phone,
-                                    items_count: cart.length
-                                }}
-                                onSuccess={handlePaymentSuccess}
-                                onClose={handlePaymentClose}
-                                disabled={processing || !customer.email || !customer.firstName}
-                                buttonText={processing ? 'Processing...' : `Pay ${totalDisplay} Securely`}
-                            />
-                        </div>
+                        <PaystackPopup
+                            email={customer.email}
+                            amount={totalKobo}
+                            reference={reference}
+                            metadata={{
+                                customer_name: `${customer.firstName} ${customer.lastName}`,
+                                phone: customer.phone,
+                                items_count: cart.length
+                            }}
+                            onSuccess={handlePaymentSuccess}
+                            onClose={handlePaymentClose}
+                            disabled={processing}
+                            buttonText={processing ? 'Processing...' : `Pay ${totalDisplay} Securely`}
+                        />
 
                         {/* Trust Badges */}
                         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '24px', marginTop: '24px', padding: '16px', background: '#F0F7F6', borderRadius: '12px' }}>
