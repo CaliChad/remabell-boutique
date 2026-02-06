@@ -7,6 +7,36 @@ import { generateReference, calculateCartTotalKobo, formatAmount, validateEmail,
 import { createOrder, saveOrder, markOrderAsPaid } from '../../lib/orders';
 import PaystackPopup from '../../components/PaystackPopup';
 
+// Location data arrays
+const mainlandAreas = [
+    'Agege', 'Alimosho', 'Egbeda', 'Ejigbo', 'Gbagada', 'Idimu', 'Ikeja',
+    'Ikotun', 'Ikorodu', 'Ilupeju', 'Ipaja', 'Isolo', 'Ketu', 'Magodo',
+    'Maryland', 'Mushin', 'Ogba', 'Ojodu', 'Ojota', 'Oshodi', 'Surulere', 'Yaba',
+    'Other (Contact us on WhatsApp)'
+];
+
+const islandAreas = [
+    'Ajah', 'Agungi', 'Banana Island', 'Chevron', 'Ikoyi', 'Lekki Phase 1',
+    'Lekki Phase 2', 'Oniru', 'Sangotedo', 'Victoria Island (VI)', 'VGC',
+    'Other (Contact us on WhatsApp)'
+];
+
+const nigerianStates = [
+    'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue',
+    'Borno', 'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu',
+    'FCT Abuja', 'Gombe', 'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina',
+    'Kebbi', 'Kogi', 'Kwara', 'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun',
+    'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara',
+    'Other (Contact us on WhatsApp)'
+];
+
+// Shipping fee constants (in Naira)
+const SHIPPING_FEES = {
+    'lagos-mainland': 4000,
+    'lagos-island': 5000,
+    'outside-lagos': 7500
+};
+
 export default function CheckoutPage() {
     const router = useRouter();
     const [cart, setCart] = useState([]);
@@ -22,15 +52,18 @@ export default function CheckoutPage() {
         email: '',
         phone: '',
         address: '',
-        city: 'Lagos',
-        state: 'Lagos',
         notes: ''
     });
+
+    // Shipping state
+    const [shippingRegion, setShippingRegion] = useState('');
+    const [specificLocation, setSpecificLocation] = useState('');
+    const [shippingFee, setShippingFee] = useState(0);
 
     // Consultation date/time (for virtual products)
     const [consultationDateTime, setConsultationDateTime] = useState('');
 
-    // Load cart on mount
+    // Load cart and saved shipping selections on mount
     useEffect(() => {
         const cartData = getCart();
         if (!cartData || cartData.length === 0) {
@@ -39,14 +72,85 @@ export default function CheckoutPage() {
         }
         setCart(cartData);
         setReference(generateReference());
+
+        // Restore saved shipping selections from localStorage
+        const savedRegion = localStorage.getItem('remabell_shipping_region');
+        const savedLocation = localStorage.getItem('remabell_shipping_location');
+        if (savedRegion) {
+            setShippingRegion(savedRegion);
+            setShippingFee(SHIPPING_FEES[savedRegion] || 7500);
+        }
+        if (savedLocation) {
+            setSpecificLocation(savedLocation);
+        }
+
         setLoading(false);
     }, [router]);
 
+    // Update shipping fee when region changes
+    const handleRegionChange = (region) => {
+        setShippingRegion(region);
+        setSpecificLocation(''); // Clear location when region changes
+        localStorage.setItem('remabell_shipping_region', region);
+        localStorage.removeItem('remabell_shipping_location');
+
+        if (region) {
+            setShippingFee(SHIPPING_FEES[region] || 7500);
+        } else {
+            setShippingFee(0);
+        }
+
+        // Clear errors
+        if (errors.shippingRegion) {
+            setErrors(prev => ({ ...prev, shippingRegion: '' }));
+        }
+    };
+
+    // Handle location change
+    const handleLocationChange = (location) => {
+        setSpecificLocation(location);
+        localStorage.setItem('remabell_shipping_location', location);
+        if (errors.specificLocation) {
+            setErrors(prev => ({ ...prev, specificLocation: '' }));
+        }
+    };
+
+    // Get location options based on region
+    const getLocationOptions = () => {
+        switch (shippingRegion) {
+            case 'lagos-mainland':
+                return mainlandAreas;
+            case 'lagos-island':
+                return islandAreas;
+            case 'outside-lagos':
+                return nigerianStates;
+            default:
+                return [];
+        }
+    };
+
+    // Check if "Other" location is selected
+    const isOtherLocation = specificLocation.includes('Other');
+
     // Calculate totals
-    const totalKobo = calculateCartTotalKobo(cart);
-    const totalDisplay = formatAmount(totalKobo);
+    const subtotalKobo = calculateCartTotalKobo(cart);
+    const shippingKobo = shippingFee * 100;
     const hasConsultations = hasVirtualProducts(cart);
     const hasPhysicalProducts = cart.some(item => !item.isVirtual);
+
+    // Total includes shipping only for physical products
+    const totalKobo = hasPhysicalProducts ? subtotalKobo + shippingKobo : subtotalKobo;
+    const subtotalDisplay = formatAmount(subtotalKobo);
+    const shippingDisplay = shippingFee > 0 ? formatAmount(shippingKobo) : null;
+    const totalDisplay = formatAmount(totalKobo);
+
+    // Get delivery timeline
+    const getDeliveryTimeline = () => {
+        if (shippingRegion.includes('lagos')) {
+            return '1-2 days';
+        }
+        return '3-5 days';
+    };
 
     // Form validation
     const validateForm = () => {
@@ -64,9 +168,20 @@ export default function CheckoutPage() {
         } else if (!validateNigerianPhone(customer.phone)) {
             newErrors.phone = 'Please enter a valid Nigerian phone number';
         }
-        if (hasPhysicalProducts && !customer.address.trim()) {
-            newErrors.address = 'Delivery address is required for physical products';
+
+        // Shipping validation for physical products
+        if (hasPhysicalProducts) {
+            if (!shippingRegion) {
+                newErrors.shippingRegion = 'Please select your delivery region';
+            }
+            if (shippingRegion && !specificLocation) {
+                newErrors.specificLocation = 'Please select your specific location';
+            }
+            if (!customer.address.trim()) {
+                newErrors.address = 'Street address is required for delivery';
+            }
         }
+
         if (hasConsultations && !consultationDateTime) {
             newErrors.consultationDateTime = 'Please select your preferred consultation date/time';
         }
@@ -79,7 +194,6 @@ export default function CheckoutPage() {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setCustomer(prev => ({ ...prev, [name]: value }));
-        // Clear error when user starts typing
         if (errors[name]) {
             setErrors(prev => ({ ...prev, [name]: '' }));
         }
@@ -90,30 +204,34 @@ export default function CheckoutPage() {
         setProcessing(true);
 
         try {
-            // Verify payment on server
             const verifyResponse = await fetch(`/api/paystack/verify?reference=${transaction.reference}`);
             const verifyData = await verifyResponse.json();
 
             if (verifyData.success && verifyData.data.isSuccessful) {
-                // Create and save order
                 const order = createOrder({
                     reference: transaction.reference,
                     cart,
-                    customer,
+                    customer: {
+                        ...customer,
+                        shippingRegion,
+                        specificLocation,
+                        shippingFee
+                    },
                     totalAmount: totalKobo / 100,
+                    shippingFee: shippingFee,
                     paymentStatus: 'paid',
                     consultationDateTime: hasConsultations ? consultationDateTime : null
                 });
 
-                // Mark as paid and save
                 markOrderAsPaid(transaction.reference, {
                     transaction_id: verifyData.data.transaction_id
                 });
 
-                // Clear cart
+                // Clear cart and saved shipping
                 clearCart();
+                localStorage.removeItem('remabell_shipping_region');
+                localStorage.removeItem('remabell_shipping_location');
 
-                // Redirect to success page
                 router.push(`/order-success?reference=${transaction.reference}`);
             } else {
                 alert('Payment verification failed. Please contact support.');
@@ -126,31 +244,49 @@ export default function CheckoutPage() {
         }
     };
 
-    // Handle payment popup close
     const handlePaymentClose = () => {
         console.log('Payment popup closed');
     };
 
-    // Create order before payment
     const handleProceedToPayment = () => {
         if (!validateForm()) {
-            // Scroll to first error
             const firstError = document.querySelector('.error-field');
             if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return false;
         }
 
-        // Pre-create order (pending status)
+        if (isOtherLocation) {
+            alert('Please contact us on WhatsApp to arrange delivery to your location.');
+            return false;
+        }
+
         const order = createOrder({
             reference,
             cart,
-            customer,
+            customer: {
+                ...customer,
+                shippingRegion,
+                specificLocation,
+                shippingFee
+            },
             totalAmount: totalKobo / 100,
+            shippingFee: shippingFee,
             paymentStatus: 'pending',
             consultationDateTime: hasConsultations ? consultationDateTime : null
         });
         saveOrder(order);
 
+        return true;
+    };
+
+    // Check if form is complete for payment
+    const isFormComplete = () => {
+        if (!customer.email || !customer.firstName || !customer.lastName || !customer.phone) return false;
+        if (hasPhysicalProducts) {
+            if (!shippingRegion || !specificLocation || !customer.address) return false;
+            if (isOtherLocation) return false;
+        }
+        if (hasConsultations && !consultationDateTime) return false;
         return true;
     };
 
@@ -184,7 +320,6 @@ export default function CheckoutPage() {
                         </div>
                     </a>
 
-                    {/* Trust Badge */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4CAF50', fontSize: '13px', fontWeight: 500 }}>
                         <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -304,84 +439,6 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        {/* Delivery Address - Only for physical products */}
-                        {hasPhysicalProducts && (
-                            <div style={{ marginTop: '16px' }} className={errors.address ? 'error-field' : ''}>
-                                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#2C2C2C', marginBottom: '6px' }}>
-                                    Delivery Address *
-                                </label>
-                                <textarea
-                                    name="address"
-                                    value={customer.address}
-                                    onChange={handleInputChange}
-                                    placeholder="Enter your full delivery address (Street, Area, Landmark)"
-                                    rows={3}
-                                    style={{
-                                        width: '100%',
-                                        padding: '14px 16px',
-                                        border: errors.address ? '2px solid #EF4444' : '2px solid #E8EDE8',
-                                        borderRadius: '10px',
-                                        fontSize: '15px',
-                                        outline: 'none',
-                                        resize: 'vertical',
-                                        fontFamily: 'inherit'
-                                    }}
-                                />
-                                {errors.address && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.address}</p>}
-                            </div>
-                        )}
-
-                        {/* City and State */}
-                        {hasPhysicalProducts && (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginTop: '16px' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#2C2C2C', marginBottom: '6px' }}>
-                                        City
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="city"
-                                        value={customer.city}
-                                        onChange={handleInputChange}
-                                        style={{
-                                            width: '100%',
-                                            padding: '14px 16px',
-                                            border: '2px solid #E8EDE8',
-                                            borderRadius: '10px',
-                                            fontSize: '15px',
-                                            outline: 'none'
-                                        }}
-                                    />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#2C2C2C', marginBottom: '6px' }}>
-                                        State
-                                    </label>
-                                    <select
-                                        name="state"
-                                        value={customer.state}
-                                        onChange={handleInputChange}
-                                        style={{
-                                            width: '100%',
-                                            padding: '14px 16px',
-                                            border: '2px solid #E8EDE8',
-                                            borderRadius: '10px',
-                                            fontSize: '15px',
-                                            outline: 'none',
-                                            background: 'white'
-                                        }}
-                                    >
-                                        <option value="Lagos">Lagos</option>
-                                        <option value="Abuja">Abuja</option>
-                                        <option value="Rivers">Rivers</option>
-                                        <option value="Oyo">Oyo</option>
-                                        <option value="Kano">Kano</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                            </div>
-                        )}
-
                         {/* Consultation Date/Time - Only for virtual products */}
                         {hasConsultations && (
                             <div style={{ marginTop: '24px', padding: '20px', background: '#F0F7F6', borderRadius: '12px', border: '1px solid #2C5F5D20' }} className={errors.consultationDateTime ? 'error-field' : ''}>
@@ -444,10 +501,173 @@ export default function CheckoutPage() {
                         </div>
                     </section>
 
+                    {/* Delivery Information - Only for physical products */}
+                    {hasPhysicalProducts && (
+                        <section style={{ background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+                            <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#2C2C2C', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ width: '28px', height: '28px', background: '#2C5F5D', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>2</span>
+                                Delivery Information
+                            </h2>
+
+                            {/* Shipping Region Selector */}
+                            <div className={errors.shippingRegion ? 'error-field' : ''} style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '8px' }}>
+                                    Select Your Delivery Region *
+                                </label>
+                                <select
+                                    value={shippingRegion}
+                                    onChange={(e) => handleRegionChange(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '16px',
+                                        border: errors.shippingRegion ? '2px solid #EF4444' : '2px solid #E8EDE8',
+                                        borderRadius: '12px',
+                                        fontSize: '16px',
+                                        fontWeight: 500,
+                                        outline: 'none',
+                                        background: 'white',
+                                        cursor: 'pointer',
+                                        minHeight: '54px'
+                                    }}
+                                >
+                                    <option value="">-- Choose your region --</option>
+                                    <option value="lagos-mainland">Lagos Mainland (₦4,000)</option>
+                                    <option value="lagos-island">Lagos Island (₦5,000)</option>
+                                    <option value="outside-lagos">Outside Lagos (₦7,500)</option>
+                                </select>
+                                {errors.shippingRegion && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.shippingRegion}</p>}
+                                <p style={{ fontSize: '12px', color: '#6B6B6B', marginTop: '8px' }}>
+                                    🚚 Mainland/Island: 1-2 days delivery • Outside Lagos: 3-5 days delivery
+                                </p>
+                            </div>
+
+                            {/* Specific Location Dropdown - Conditional */}
+                            {shippingRegion && (
+                                <div
+                                    className={errors.specificLocation ? 'error-field' : ''}
+                                    style={{
+                                        marginBottom: '20px',
+                                        animation: 'fadeIn 0.3s ease'
+                                    }}
+                                >
+                                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '8px' }}>
+                                        Select Your Specific Location *
+                                    </label>
+                                    <select
+                                        value={specificLocation}
+                                        onChange={(e) => handleLocationChange(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '16px',
+                                            border: errors.specificLocation ? '2px solid #EF4444' : '2px solid #E8EDE8',
+                                            borderRadius: '12px',
+                                            fontSize: '16px',
+                                            fontWeight: 500,
+                                            outline: 'none',
+                                            background: 'white',
+                                            cursor: 'pointer',
+                                            minHeight: '54px'
+                                        }}
+                                    >
+                                        <option value="">-- Choose your {shippingRegion === 'outside-lagos' ? 'state' : 'area'} --</option>
+                                        {getLocationOptions().map(location => (
+                                            <option key={location} value={location}>{location}</option>
+                                        ))}
+                                    </select>
+                                    {errors.specificLocation && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.specificLocation}</p>}
+                                </div>
+                            )}
+
+                            {/* Other Location Warning */}
+                            {isOtherLocation && (
+                                <div style={{
+                                    padding: '16px',
+                                    background: '#FEF3C7',
+                                    borderRadius: '12px',
+                                    border: '1px solid #F59E0B',
+                                    marginBottom: '20px'
+                                }}>
+                                    <p style={{ fontSize: '14px', color: '#92400E', fontWeight: 500, margin: 0 }}>
+                                        ⚠️ Please contact us on WhatsApp to arrange delivery to your location.
+                                    </p>
+                                    <a
+                                        href="https://wa.me/2347080803226"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            marginTop: '12px',
+                                            padding: '10px 20px',
+                                            background: '#25D366',
+                                            color: 'white',
+                                            borderRadius: '8px',
+                                            fontSize: '14px',
+                                            fontWeight: 600,
+                                            textDecoration: 'none'
+                                        }}
+                                    >
+                                        Contact WhatsApp
+                                    </a>
+                                </div>
+                            )}
+
+                            {/* Street Address */}
+                            <div className={errors.address ? 'error-field' : ''} style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '8px' }}>
+                                    Street Address *
+                                </label>
+                                <textarea
+                                    name="address"
+                                    value={customer.address}
+                                    onChange={handleInputChange}
+                                    placeholder="House number, street name, landmarks..."
+                                    rows={3}
+                                    style={{
+                                        width: '100%',
+                                        padding: '14px 16px',
+                                        border: errors.address ? '2px solid #EF4444' : '2px solid #E8EDE8',
+                                        borderRadius: '12px',
+                                        fontSize: '15px',
+                                        outline: 'none',
+                                        resize: 'vertical',
+                                        fontFamily: 'inherit'
+                                    }}
+                                />
+                                {errors.address && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.address}</p>}
+                            </div>
+
+                            {/* Delivery Fee Display */}
+                            {shippingRegion && !isOtherLocation && (
+                                <div style={{
+                                    padding: '20px',
+                                    background: '#F0F7F6',
+                                    borderRadius: '12px',
+                                    border: '2px solid #2C5F5D30',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <span style={{ fontSize: '24px' }}>🚚</span>
+                                        <div>
+                                            <p style={{ fontSize: '14px', fontWeight: 500, color: '#2C2C2C', margin: 0 }}>Delivery Fee</p>
+                                            <p style={{ fontSize: '12px', color: '#6B6B6B', margin: 0 }}>{getDeliveryTimeline()} delivery</p>
+                                        </div>
+                                    </div>
+                                    <p style={{ fontSize: '20px', fontWeight: 700, color: '#2C5F5D', margin: 0 }}>
+                                        ₦{shippingFee.toLocaleString('en-NG')}
+                                    </p>
+                                </div>
+                            )}
+                        </section>
+                    )}
+
                     {/* Order Summary */}
                     <section style={{ background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                         <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#2C2C2C', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ width: '28px', height: '28px', background: '#2C5F5D', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>2</span>
+                            <span style={{ width: '28px', height: '28px', background: '#2C5F5D', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>{hasPhysicalProducts ? '3' : '2'}</span>
                             Order Summary
                         </h2>
 
@@ -480,15 +700,25 @@ export default function CheckoutPage() {
                         {/* Summary Totals */}
                         <div style={{ borderTop: '1px solid #E8EDE8', paddingTop: '16px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <span style={{ color: '#6B6B6B' }}>Subtotal</span>
-                                <span style={{ fontWeight: 500 }}>{totalDisplay}</span>
+                                <span style={{ color: '#6B6B6B' }}>Items Subtotal</span>
+                                <span style={{ fontWeight: 500 }}>{subtotalDisplay}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
-                                <span style={{ color: '#6B6B6B' }}>Shipping</span>
-                                <span style={{ fontWeight: 500, color: '#4CAF50' }}>Free</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderTop: '2px solid #2C5F5D' }}>
-                                <span style={{ fontSize: '18px', fontWeight: 600, color: '#2C2C2C' }}>Total</span>
+
+                            {hasPhysicalProducts && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
+                                    <span style={{ color: '#6B6B6B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        🚚 Delivery
+                                    </span>
+                                    {shippingDisplay ? (
+                                        <span style={{ fontWeight: 600, color: '#2C5F5D' }}>{shippingDisplay}</span>
+                                    ) : (
+                                        <span style={{ fontWeight: 500, color: '#9CA3AF', fontSize: '13px' }}>Select region above</span>
+                                    )}
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderTop: '2px solid #2C5F5D', marginTop: '8px' }}>
+                                <span style={{ fontSize: '18px', fontWeight: 600, color: '#2C2C2C' }}>Order Total</span>
                                 <span style={{ fontSize: '24px', fontWeight: 700, color: '#2C5F5D' }}>{totalDisplay}</span>
                             </div>
                         </div>
@@ -497,9 +727,24 @@ export default function CheckoutPage() {
                     {/* Payment Section */}
                     <section style={{ background: 'white', borderRadius: '16px', padding: '32px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                         <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#2C2C2C', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ width: '28px', height: '28px', background: '#2C5F5D', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>3</span>
+                            <span style={{ width: '28px', height: '28px', background: '#2C5F5D', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>{hasPhysicalProducts ? '4' : '3'}</span>
                             Payment
                         </h2>
+
+                        {/* Validation Warning */}
+                        {!isFormComplete() && (
+                            <div style={{
+                                padding: '16px',
+                                background: '#FEF3C7',
+                                borderRadius: '12px',
+                                border: '1px solid #F59E0B',
+                                marginBottom: '24px'
+                            }}>
+                                <p style={{ fontSize: '14px', color: '#92400E', fontWeight: 500, margin: 0 }}>
+                                    ⚠️ Please complete all delivery information above to proceed with payment.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Payment Method Display */}
                         <div style={{ padding: '16px', background: '#FAF8F5', borderRadius: '12px', marginBottom: '24px' }}>
@@ -510,20 +755,16 @@ export default function CheckoutPage() {
                                 Pay securely with Mastercard, Visa, Verve, or Bank Transfer. 100% safe and encrypted.
                             </p>
                             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                                {/* Visa */}
                                 <div style={{ padding: '6px 12px', background: 'white', borderRadius: '6px', border: '1px solid #E8EDE8' }}>
                                     <span style={{ fontSize: '12px', fontWeight: 700, color: '#1A1F71' }}>VISA</span>
                                 </div>
-                                {/* Mastercard */}
                                 <div style={{ padding: '6px 12px', background: 'white', borderRadius: '6px', border: '1px solid #E8EDE8', display: 'flex', alignItems: 'center', gap: '2px' }}>
                                     <div style={{ width: '12px', height: '12px', background: '#EB001B', borderRadius: '50%' }} />
                                     <div style={{ width: '12px', height: '12px', background: '#F79E1B', borderRadius: '50%', marginLeft: '-4px' }} />
                                 </div>
-                                {/* Verve */}
                                 <div style={{ padding: '6px 12px', background: 'white', borderRadius: '6px', border: '1px solid #E8EDE8' }}>
                                     <span style={{ fontSize: '12px', fontWeight: 700, color: '#00425F' }}>VERVE</span>
                                 </div>
-                                {/* Bank Transfer */}
                                 <div style={{ padding: '6px 12px', background: 'white', borderRadius: '6px', border: '1px solid #E8EDE8' }}>
                                     <span style={{ fontSize: '11px', fontWeight: 600, color: '#6B6B6B' }}>Bank Transfer</span>
                                 </div>
@@ -538,11 +779,16 @@ export default function CheckoutPage() {
                             metadata={{
                                 customer_name: `${customer.firstName} ${customer.lastName}`,
                                 phone: customer.phone,
-                                items_count: cart.length
+                                items_count: cart.length,
+                                shipping_region: shippingRegion || 'N/A',
+                                delivery_location: specificLocation || 'N/A',
+                                shipping_fee: shippingFee,
+                                delivery_timeline: hasPhysicalProducts ? getDeliveryTimeline() : 'N/A',
+                                street_address: customer.address || 'N/A'
                             }}
                             onSuccess={handlePaymentSuccess}
                             onClose={handlePaymentClose}
-                            disabled={processing}
+                            disabled={processing || !isFormComplete() || isOtherLocation}
                             buttonText={processing ? 'Processing...' : `Pay ${totalDisplay} Securely`}
                         />
 
@@ -609,6 +855,12 @@ export default function CheckoutPage() {
                     © 2026 Remabell Exquisite. All rights reserved.
                 </p>
             </footer>
+
+            {/* Animations */}
+            <style jsx>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+                @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+            `}</style>
         </div>
     );
 }

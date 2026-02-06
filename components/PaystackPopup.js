@@ -19,11 +19,28 @@ export default function PaystackPopup({
 }) {
     const [scriptLoaded, setScriptLoaded] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [envError, setEnvError] = useState(null);
+
+    // Environment check on mount
+    useEffect(() => {
+        const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
+        console.log('🔧 Paystack Environment Check:');
+        console.log('   Public Key:', publicKey ? `${publicKey.substring(0, 20)}...` : '❌ MISSING');
+        console.log('   Site URL:', process.env.NEXT_PUBLIC_SITE_URL || '❌ NOT SET');
+        console.log('   Environment:', process.env.NODE_ENV);
+
+        if (!publicKey) {
+            setEnvError('NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is not configured');
+            console.error('❌ CRITICAL: Paystack public key is missing from environment variables');
+            console.error('   Ensure NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is set in Vercel Environment Variables');
+        }
+    }, []);
 
     // Load Paystack script
     useEffect(() => {
         // Check if already loaded
         if (window.PaystackPop) {
+            console.log('✅ PaystackPop already available');
             setScriptLoaded(true);
             return;
         }
@@ -31,20 +48,24 @@ export default function PaystackPopup({
         // Check if script tag already exists
         const existingScript = document.querySelector('script[src*="paystack.co"]');
         if (existingScript) {
+            console.log('⏳ Paystack script exists, waiting for load...');
             existingScript.addEventListener('load', () => setScriptLoaded(true));
+            if (window.PaystackPop) setScriptLoaded(true);
             return;
         }
 
         // Create and load script
+        console.log('📦 Loading Paystack script...');
         const script = document.createElement('script');
         script.src = 'https://js.paystack.co/v2/inline.js';
         script.async = true;
         script.onload = () => {
-            console.log('✅ Paystack script loaded');
+            console.log('✅ Paystack script loaded successfully');
             setScriptLoaded(true);
         };
-        script.onerror = () => {
-            console.error('❌ Failed to load Paystack script');
+        script.onerror = (e) => {
+            console.error('❌ Failed to load Paystack script:', e);
+            setEnvError('Failed to load Paystack payment system');
         };
         document.head.appendChild(script);
 
@@ -83,7 +104,8 @@ export default function PaystackPopup({
 
         if (!publicKey) {
             console.error('❌ Paystack public key not configured');
-            alert('Payment configuration error. Please contact support.');
+            console.error('   This usually means NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is not set in Vercel');
+            alert('Payment configuration error. The payment system is not properly configured. Please contact support and mention: ENV_KEY_MISSING');
             return;
         }
 

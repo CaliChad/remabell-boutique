@@ -6,6 +6,13 @@ import { NextResponse } from 'next/server';
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
+// Log configuration status on module load (helps debug missing env vars)
+if (!PAYSTACK_SECRET_KEY) {
+    console.warn('⚠️ PAYSTACK_SECRET_KEY is not configured - verify API will fail');
+} else {
+    console.log('✅ Paystack verify route initialized with secret key');
+}
+
 export async function GET(request) {
     try {
         const { searchParams } = new URL(request.url);
