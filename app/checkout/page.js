@@ -45,6 +45,11 @@ export default function CheckoutPage() {
     const [reference, setReference] = useState('');
     const [errors, setErrors] = useState({});
 
+    // Sunday detection
+    const today = new Date();
+    const isSunday = today.getDay() === 0;
+    const [sundayBannerDismissed, setSundayBannerDismissed] = useState(false);
+
     // Customer form state
     const [customer, setCustomer] = useState({
         firstName: '',
@@ -331,6 +336,50 @@ export default function CheckoutPage() {
 
             {/* Main Content */}
             <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px 64px' }}>
+                {/* Sunday Closure Notice Banner */}
+                {isSunday && !sundayBannerDismissed && (
+                    <div style={{
+                        background: '#FFF4E6',
+                        borderLeft: '4px solid #FB923C',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        marginBottom: '24px',
+                        maxWidth: '900px',
+                        margin: '0 auto 24px',
+                        position: 'relative',
+                        animation: 'fadeIn 0.5s ease-in-out'
+                    }}>
+                        <button
+                            onClick={() => setSundayBannerDismissed(true)}
+                            style={{
+                                position: 'absolute',
+                                top: '8px',
+                                right: '8px',
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                fontSize: '18px',
+                                color: '#7C2D12',
+                                opacity: 0.7
+                            }}
+                            aria-label="Dismiss notice"
+                        >
+                            ✕
+                        </button>
+                        <p style={{
+                            color: '#7C2D12',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            margin: 0,
+                            paddingRight: '24px',
+                            lineHeight: 1.5
+                        }}>
+                            📅 <strong>Sunday Notice:</strong> We're closed today for rest! You can still place your order, but it will be processed and dispatched on Monday morning. Thank you for understanding! 💛
+                        </p>
+                    </div>
+                )}
+
                 <h1 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '32px', fontWeight: 600, color: '#2C2C2C', marginBottom: '32px', textAlign: 'center' }}>
                     Secure Checkout
                 </h1>
@@ -784,7 +833,12 @@ export default function CheckoutPage() {
                                 delivery_location: specificLocation || 'N/A',
                                 shipping_fee: shippingFee,
                                 delivery_timeline: hasPhysicalProducts ? getDeliveryTimeline() : 'N/A',
-                                street_address: customer.address || 'N/A'
+                                street_address: customer.address || 'N/A',
+                                cart_items: JSON.stringify(cart.map(item => ({
+                                    name: item.name,
+                                    quantity: item.quantity,
+                                    price: item.price
+                                })))
                             }}
                             onSuccess={handlePaymentSuccess}
                             onClose={handlePaymentClose}
