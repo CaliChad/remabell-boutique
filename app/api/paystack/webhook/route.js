@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { Resend } from 'resend';
-import { generateOrderNotificationEmail, generateCustomerConfirmationEmail } from '../../../../lib/email-templates';
+import { generateOrderNotificationEmail, generateCustomerConfirmationEmail, generateMasterclassNotificationEmail, generateMasterclassWelcomeEmail } from '../../../../lib/email-templates';
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
@@ -95,7 +95,8 @@ async function handleChargeSuccess(data) {
         amount: amount / 100,
         email: customer?.email,
         channel,
-        paid_at
+        paid_at,
+        product_type: metadata?.product_type
     });
 
     // Check if Resend is configured
@@ -103,6 +104,73 @@ async function handleChargeSuccess(data) {
         console.warn(`[WEBHOOK] ${timestamp} ⚠️ Resend not configured - skipping emails`);
         return;
     }
+
+    // Check if this is a masterclass payment
+    const isMasterclass = metadata?.product_type === 'masterclass';
+
+    if (isMasterclass) {
+        await handleMasterclassPayment(data, timestamp);
+    } else {
+        await handleRegularOrderPayment(data, timestamp);
+    }
+}
+
+/**
+ * Handle masterclass payment - send masterclass-specific emails
+ */
+async function handleMasterclassPayment(data, timestamp) {
+    const { reference, customer, metadata, paid_at } = data;
+
+    const masterclassData = {
+        studentEmail: customer?.email || metadata?.student_email,
+        reference,
+        paidAt: paid_at,
+        classDates: metadata?.class_dates || 'Feb 26-28, 2026'
+    };
+
+    if (!masterclassData.studentEmail) {
+        console.error(`[WEBHOOK] ${timestamp} ❌ Missing student email - cannot send masterclass emails`);
+        return;
+    }
+
+    // Send Email 1: Notification to Maryann
+    try {
+        console.log(`[WEBHOOK] ${timestamp} 📧 Sending masterclass notification to Maryann...`);
+
+        await resend.emails.send({
+            from: 'Remabell Exquisite <orders@remabellexquisite.ng>',
+            to: MARYANN_EMAIL,
+            subject: `🎓 New Masterclass Student - ${masterclassData.studentEmail} - ₦85,000`,
+            html: generateMasterclassNotificationEmail(masterclassData)
+        });
+
+        console.log(`[WEBHOOK] ${timestamp} ✅ Maryann masterclass notification sent`);
+    } catch (error) {
+        console.error(`[WEBHOOK] ${timestamp} ❌ Failed to send Maryann masterclass notification:`, error);
+    }
+
+    // Send Email 2: Welcome to student
+    try {
+        console.log(`[WEBHOOK] ${timestamp} 📧 Sending masterclass welcome to: ${masterclassData.studentEmail}`);
+
+        await resend.emails.send({
+            from: 'Remabell Exquisite <orders@remabellexquisite.ng>',
+            to: masterclassData.studentEmail,
+            subject: `Welcome to Remabell's Skincare Masterclass! 🌟`,
+            html: generateMasterclassWelcomeEmail(masterclassData)
+        });
+
+        console.log(`[WEBHOOK] ${timestamp} ✅ Student masterclass welcome sent`);
+    } catch (error) {
+        console.error(`[WEBHOOK] ${timestamp} ❌ Failed to send student masterclass welcome:`, error);
+    }
+}
+
+/**
+ * Handle regular order payment - send order confirmation emails
+ */
+async function handleRegularOrderPayment(data, timestamp) {
+    const { reference, amount, customer, metadata, paid_at } = data;
 
     // Parse cart items from metadata
     let cartItems = [];
