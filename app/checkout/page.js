@@ -232,6 +232,15 @@ export default function CheckoutPage() {
                     transaction_id: verifyData.data.transaction_id
                 });
 
+                // Track TikTok Pixel conversion
+                if (typeof window !== 'undefined' && window.ttq) {
+                    window.ttq.track('CompletePayment', {
+                        value: totalKobo / 100,
+                        currency: 'NGN',
+                        content_type: 'product'
+                    });
+                }
+
                 // Clear cart and saved shipping
                 clearCart();
                 localStorage.removeItem('remabell_shipping_region');
