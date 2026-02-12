@@ -51,7 +51,22 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleAdd = (p) => { addToCart(p, 1); setCart(getCart()); setCartCount(getCartCount()); };
+  const handleAdd = (p) => {
+    addToCart(p, 1);
+    setCart(getCart());
+    setCartCount(getCartCount());
+    // TikTok Pixel: AddToCart event
+    if (typeof window !== 'undefined' && window.ttq) {
+      const priceNum = parseInt(p.price.replace(/[₦,]/g, '')) || 0;
+      window.ttq.track('AddToCart', {
+        content_type: 'product',
+        content_id: String(p.id),
+        content_name: p.name,
+        value: priceNum,
+        currency: 'NGN'
+      });
+    }
+  };
   const handleRemove = (id) => { removeFromCart(id); setCart(getCart()); setCartCount(getCartCount()); };
   const handleQty = (id, q) => { updateQuantity(id, q); setCart(getCart()); setCartCount(getCartCount()); };
 

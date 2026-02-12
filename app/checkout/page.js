@@ -89,6 +89,19 @@ export default function CheckoutPage() {
             setSpecificLocation(savedLocation);
         }
 
+        // TikTok Pixel: InitiateCheckout event
+        if (typeof window !== 'undefined' && window.ttq) {
+            const cartTotalNaira = cartData.reduce((total, item) => {
+                const price = parseInt(item.price.replace(/[₦,]/g, '')) || 0;
+                return total + (price * item.quantity);
+            }, 0);
+            window.ttq.track('InitiateCheckout', {
+                content_type: 'product',
+                value: cartTotalNaira,
+                currency: 'NGN'
+            });
+        }
+
         setLoading(false);
     }, [router]);
 
