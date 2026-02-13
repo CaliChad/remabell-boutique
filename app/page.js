@@ -14,6 +14,10 @@ export default function Home() {
   const [displayedCount, setDisplayedCount] = useState(24);
   const [sortBy, setSortBy] = useState('featured');
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [paystackReady, setPaystackReady] = useState(false);
+  const [consultationModal, setConsultationModal] = useState(null);
+  const [consultationEmail, setConsultationEmail] = useState('');
+  const [consultationEmailError, setConsultationEmailError] = useState('');
   const brands = ['The Ordinary', 'CeraVe', 'Neutrogena', 'La Roche-Posay', 'Clean & Clear'];
   const PRODUCTS_PER_LOAD = 24;
 
@@ -24,6 +28,22 @@ export default function Home() {
     const handleScroll = () => setShowBackToTop(window.scrollY > 500);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Load Paystack inline script
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.PaystackPop) { setPaystackReady(true); return; }
+    const existing = document.querySelector('script[src*="paystack.co"]');
+    if (existing) {
+      existing.addEventListener('load', () => setPaystackReady(true));
+      if (window.PaystackPop) setPaystackReady(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://js.paystack.co/v2/inline.js';
+    script.async = true;
+    script.onload = () => setPaystackReady(true);
+    document.head.appendChild(script);
   }, []);
 
   const filtered = products.filter(p => {
@@ -70,56 +90,56 @@ export default function Home() {
   const handleRemove = (id) => { removeFromCart(id); setCart(getCart()); setCartCount(getCartCount()); };
   const handleQty = (id, q) => { updateQuantity(id, q); setCart(getCart()); setCartCount(getCartCount()); };
 
-  const handleConsultationPayment = () => {
-    if (typeof window === 'undefined' || !window.PaystackPop) return;
-    const email = prompt('Enter your email:');
-    if (!email) return;
-    const handler = window.PaystackPop.setup({
-      key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-      email,
-      amount: 2000000,
-      currency: 'NGN',
-      ref: 'CONSULT_' + Date.now(),
-      metadata: {
-        product_type: 'consultation',
-        service_name: 'Expert Skincare Consultation',
-        price: 20000
-      },
-      onSuccess: (reference) => {
-        alert('Payment successful! We will contact you within 24 hours to schedule your consultation.');
-        if (window.ttq) {
-          window.ttq.track('CompletePayment', { value: 20000, currency: 'NGN', content_type: 'consultation' });
-        }
-      },
-      onClose: () => { console.log('Payment cancelled'); }
-    });
-    handler.openIframe();
+  const openConsultationModal = (type) => {
+    setConsultationEmail('');
+    setConsultationEmailError('');
+    setConsultationModal(type);
   };
 
-  const handleVideoConsultationPayment = () => {
-    if (typeof window === 'undefined' || !window.PaystackPop) return;
-    const email = prompt('Enter your email:');
-    if (!email) return;
-    const handler = window.PaystackPop.setup({
-      key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
-      email,
-      amount: 3500000,
-      currency: 'NGN',
-      ref: 'VIDEOCONSULT_' + Date.now(),
-      metadata: {
-        product_type: 'consultation',
-        service_name: 'FaceTime Video Consultation',
-        price: 35000
-      },
-      onSuccess: (reference) => {
-        alert('Payment successful! We will contact you within 24 hours to schedule your FaceTime video consultation.');
-        if (window.ttq) {
-          window.ttq.track('CompletePayment', { value: 35000, currency: 'NGN', content_type: 'consultation' });
-        }
-      },
-      onClose: () => { console.log('Payment cancelled'); }
-    });
-    handler.openIframe();
+  const processConsultationPayment = () => {
+    if (!consultationEmail.trim()) { setConsultationEmailError('Please enter your email address'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(consultationEmail)) { setConsultationEmailError('Please enter a valid email address'); return; }
+    if (!paystackReady || !window.PaystackPop) { alert('Payment system is loading. Please wait a moment and try again.'); return; }
+
+    const isVideo = consultationModal === 'video';
+    const amount = isVideo ? 3500000 : 2000000;
+    const price = isVideo ? 35000 : 20000;
+    const serviceName = isVideo ? 'FaceTime Video Consultation' : 'Expert Skincare Consultation';
+    const ref = (isVideo ? 'VIDEOCONSULT_' : 'CONSULT_') + Date.now();
+
+    setConsultationModal(null);
+
+    try {
+      const popup = new window.PaystackPop();
+      popup.newTransaction({
+        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+        email: consultationEmail,
+        amount,
+        currency: 'NGN',
+        ref,
+        channels: ['card', 'bank', 'ussd', 'bank_transfer'],
+        metadata: {
+          product_type: 'consultation',
+          service_name: serviceName,
+          price,
+          custom_fields: [
+            { display_name: 'Product Type', variable_name: 'product_type', value: 'consultation' },
+            { display_name: 'Service', variable_name: 'service_name', value: serviceName },
+            { display_name: 'Customer Email', variable_name: 'customer_email', value: consultationEmail }
+          ]
+        },
+        onSuccess: (transaction) => {
+          alert(`Payment successful! We will contact you within 24 hours to schedule your ${isVideo ? 'FaceTime video ' : ''}consultation.`);
+          if (window.ttq) {
+            window.ttq.track('CompletePayment', { value: price, currency: 'NGN', content_type: 'consultation' });
+          }
+        },
+        onCancel: () => { console.log('Payment cancelled'); }
+      });
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert('Failed to open payment popup. Please try again.');
+    }
   };
 
   return (
@@ -398,7 +418,7 @@ export default function Home() {
                   ))}
                 </ul>
 
-                <button onClick={handleConsultationPayment} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '18px', background: '#2C5F5D', color: 'white', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px', transition: 'all 0.3s' }} className="btn-luxury">
+                <button onClick={() => openConsultationModal('standard')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '18px', background: '#2C5F5D', color: 'white', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px', transition: 'all 0.3s' }} className="btn-luxury">
                   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                   Book Expert Consultation
                 </button>
@@ -434,7 +454,7 @@ export default function Home() {
                   ))}
                 </ul>
 
-                <button onClick={handleVideoConsultationPayment} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '18px', background: 'linear-gradient(135deg, #2C5F5D, #1F4A48)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px', transition: 'all 0.3s' }} className="btn-luxury">
+                <button onClick={() => openConsultationModal('video')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '18px', background: 'linear-gradient(135deg, #2C5F5D, #1F4A48)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px', transition: 'all 0.3s' }} className="btn-luxury">
                   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                   Book Premium Video Call
                 </button>
@@ -788,6 +808,32 @@ export default function Home() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
         </svg>
       </button>
+
+      {/* Consultation Email Modal */}
+      {consultationModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 70 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setConsultationModal(null)} />
+          <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'white', borderRadius: '16px', padding: '32px', maxWidth: '420px', width: '90%', boxShadow: '0 25px 60px rgba(0,0,0,0.2)' }}>
+            <button onClick={() => setConsultationModal(null)} style={{ position: 'absolute', top: '12px', right: '12px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+              <svg width="20" height="20" fill="none" stroke="#6B6B6B" strokeWidth="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ width: '56px', height: '56px', background: 'linear-gradient(135deg, #2C5F5D, #1F4A48)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <svg width="28" height="28" fill="none" stroke="white" strokeWidth="1.5" viewBox="0 0 24 24">{consultationModal === 'video' ? <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /> : <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />}</svg>
+              </div>
+              <h3 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '24px', fontWeight: 600, color: '#2C2C2C', margin: '0 0 4px' }}>{consultationModal === 'video' ? 'FaceTime Video Consultation' : 'Expert Skincare Consultation'}</h3>
+              <p style={{ fontSize: '24px', fontWeight: 700, color: '#2C5F5D', margin: 0 }}>{consultationModal === 'video' ? '₦35,000' : '₦20,000'}</p>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#2C2C2C', marginBottom: '6px' }}>Your Email Address</label>
+              <input type="email" value={consultationEmail} onChange={(e) => { setConsultationEmail(e.target.value); setConsultationEmailError(''); }} placeholder="you@example.com" style={{ width: '100%', padding: '14px 16px', border: consultationEmailError ? '2px solid #EF4444' : '2px solid #E8EDE8', borderRadius: '10px', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }} />
+              {consultationEmailError && <p style={{ color: '#EF4444', fontSize: '12px', margin: '4px 0 0' }}>{consultationEmailError}</p>}
+            </div>
+            <button onClick={processConsultationPayment} style={{ width: '100%', padding: '16px', background: 'linear-gradient(135deg, #2C5F5D, #1F4A48)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 16px rgba(44,95,93,0.3)' }}>Proceed to Payment</button>
+            <p style={{ textAlign: 'center', fontSize: '12px', color: '#6B6B6B', marginTop: '12px' }}>🔒 Secured by Paystack. Pay with card, bank transfer, or USSD.</p>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .group-hover\\:opacity-100:hover { opacity: 1 !important; }
