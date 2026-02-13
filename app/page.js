@@ -70,6 +70,58 @@ export default function Home() {
   const handleRemove = (id) => { removeFromCart(id); setCart(getCart()); setCartCount(getCartCount()); };
   const handleQty = (id, q) => { updateQuantity(id, q); setCart(getCart()); setCartCount(getCartCount()); };
 
+  const handleConsultationPayment = () => {
+    if (typeof window === 'undefined' || !window.PaystackPop) return;
+    const email = prompt('Enter your email:');
+    if (!email) return;
+    const handler = window.PaystackPop.setup({
+      key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+      email,
+      amount: 2000000,
+      currency: 'NGN',
+      ref: 'CONSULT_' + Date.now(),
+      metadata: {
+        product_type: 'consultation',
+        service_name: 'Expert Skincare Consultation',
+        price: 20000
+      },
+      onSuccess: (reference) => {
+        alert('Payment successful! We will contact you within 24 hours to schedule your consultation.');
+        if (window.ttq) {
+          window.ttq.track('CompletePayment', { value: 20000, currency: 'NGN', content_type: 'consultation' });
+        }
+      },
+      onClose: () => { console.log('Payment cancelled'); }
+    });
+    handler.openIframe();
+  };
+
+  const handleVideoConsultationPayment = () => {
+    if (typeof window === 'undefined' || !window.PaystackPop) return;
+    const email = prompt('Enter your email:');
+    if (!email) return;
+    const handler = window.PaystackPop.setup({
+      key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY,
+      email,
+      amount: 3500000,
+      currency: 'NGN',
+      ref: 'VIDEOCONSULT_' + Date.now(),
+      metadata: {
+        product_type: 'consultation',
+        service_name: 'FaceTime Video Consultation',
+        price: 35000
+      },
+      onSuccess: (reference) => {
+        alert('Payment successful! We will contact you within 24 hours to schedule your FaceTime video consultation.');
+        if (window.ttq) {
+          window.ttq.track('CompletePayment', { value: 35000, currency: 'NGN', content_type: 'consultation' });
+        }
+      },
+      onClose: () => { console.log('Payment cancelled'); }
+    });
+    handler.openIframe();
+  };
+
   return (
     <div className="min-h-screen" style={{ background: '#FAF8F5', fontFamily: "'Poppins', sans-serif" }}>
       {/* Google Fonts */}
@@ -346,10 +398,10 @@ export default function Home() {
                   ))}
                 </ul>
 
-                <a href="https://wa.me/2349027064415?text=Hi%20Remabell%2C%20I%20want%20to%20book%20a%20Skincare%20Routine%20%26%20Recommendations%20consultation.%0A%0A*Service%3A*%20Complete%20Skincare%20Routine%0A*Price%3A*%20%E2%82%A620%2C000%0A%0AI%E2%80%99m%20ready%20to%20make%20payment%20for%20the%20booking.%20Please%20send%20your%20account%20details%20and%20confirm%20availability.%20Thank%20you!" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '18px', background: '#2C5F5D', color: 'white', borderRadius: '12px', fontSize: '15px', fontWeight: 600, textDecoration: 'none', marginBottom: '12px', transition: 'all 0.3s' }} className="btn-luxury">
+                <button onClick={handleConsultationPayment} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '18px', background: '#2C5F5D', color: 'white', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px', transition: 'all 0.3s' }} className="btn-luxury">
                   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                   Book Expert Consultation
-                </a>
+                </button>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px', color: '#6B6B6B' }}>
                   <span>Prefer Telegram?</span>
@@ -382,10 +434,10 @@ export default function Home() {
                   ))}
                 </ul>
 
-                <a href="https://wa.me/2349027064415?text=Hi%20Remabell%2C%20I%20want%20to%20book%20a%20FaceTime%20Video%20Consultation.%0A%0A*Service%3A*%20FaceTime%20Personal%20Consultation%0A*Price%3A*%20%E2%82%A635%2C000%0A%0AI%E2%80%99m%20ready%20to%20make%20payment%20for%20the%20booking.%20Please%20send%20your%20account%20details%20and%20confirm%20available%20dates%20and%20times.%20Thank%20you!" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '18px', background: 'linear-gradient(135deg, #2C5F5D, #1F4A48)', color: 'white', borderRadius: '12px', fontSize: '15px', fontWeight: 600, textDecoration: 'none', marginBottom: '12px', transition: 'all 0.3s' }} className="btn-luxury">
+                <button onClick={handleVideoConsultationPayment} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: '100%', padding: '18px', background: 'linear-gradient(135deg, #2C5F5D, #1F4A48)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px', transition: 'all 0.3s' }} className="btn-luxury">
                   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                   Book Premium Video Call
-                </a>
+                </button>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px', color: '#6B6B6B' }}>
                   <span>Prefer Telegram?</span>

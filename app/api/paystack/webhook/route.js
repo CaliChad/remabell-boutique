@@ -105,11 +105,13 @@ async function handleChargeSuccess(data) {
         return;
     }
 
-    // Check if this is a masterclass payment
-    const isMasterclass = metadata?.product_type === 'masterclass';
+    // Route based on product type
+    const productType = metadata?.product_type;
 
-    if (isMasterclass) {
+    if (productType === 'masterclass') {
         await handleMasterclassPayment(data, timestamp);
+    } else if (productType === 'consultation') {
+        await handleConsultationPayment(data, timestamp);
     } else {
         await handleRegularOrderPayment(data, timestamp);
     }
@@ -163,6 +165,99 @@ async function handleMasterclassPayment(data, timestamp) {
         console.log(`[WEBHOOK] ${timestamp} ✅ Student masterclass welcome sent`);
     } catch (error) {
         console.error(`[WEBHOOK] ${timestamp} ❌ Failed to send student masterclass welcome:`, error);
+    }
+}
+
+/**
+ * Handle consultation payment - send consultation booking notification
+ */
+async function handleConsultationPayment(data, timestamp) {
+    const { reference, amount, customer, metadata, paid_at } = data;
+
+    const customerEmail = customer?.email || 'Unknown';
+    const serviceName = metadata?.service_name || 'Skincare Consultation';
+    const price = amount / 100;
+
+    // Send notification to Maryann
+    try {
+        console.log(`[WEBHOOK] ${timestamp} 📧 Sending consultation booking notification to Maryann...`);
+
+        await resend.emails.send({
+            from: 'Remabell Exquisite <orders@remabellexquisite.ng>',
+            to: MARYANN_EMAIL,
+            subject: `📞 New Consultation Booking - ${customerEmail} - ₦${price.toLocaleString('en-NG')}`,
+            html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9f9f9; padding: 20px;">
+  <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="width: 56px; height: 56px; background: linear-gradient(135deg, #2C5F5D, #1F4A48); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+        <span style="color: white; font-size: 28px;">📞</span>
+      </div>
+      <h1 style="color: #2C2C2C; font-size: 22px; margin: 0;">New Consultation Booking!</h1>
+    </div>
+    <div style="background: #f0faf0; border-left: 4px solid #4CAF50; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+      <p style="margin: 0; color: #2C2C2C; font-weight: 600;">💰 Payment Confirmed</p>
+    </div>
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr><td style="padding: 10px 0; color: #6B6B6B; border-bottom: 1px solid #f0f0f0;">Service</td><td style="padding: 10px 0; font-weight: 600; color: #2C2C2C; border-bottom: 1px solid #f0f0f0;">${serviceName}</td></tr>
+      <tr><td style="padding: 10px 0; color: #6B6B6B; border-bottom: 1px solid #f0f0f0;">Amount</td><td style="padding: 10px 0; font-weight: 600; color: #2C5F5D; border-bottom: 1px solid #f0f0f0;">₦${price.toLocaleString('en-NG')}</td></tr>
+      <tr><td style="padding: 10px 0; color: #6B6B6B; border-bottom: 1px solid #f0f0f0;">Customer Email</td><td style="padding: 10px 0; font-weight: 600; color: #2C2C2C; border-bottom: 1px solid #f0f0f0;">${customerEmail}</td></tr>
+      <tr><td style="padding: 10px 0; color: #6B6B6B; border-bottom: 1px solid #f0f0f0;">Reference</td><td style="padding: 10px 0; font-weight: 600; color: #2C2C2C; border-bottom: 1px solid #f0f0f0;">${reference}</td></tr>
+      <tr><td style="padding: 10px 0; color: #6B6B6B;">Paid At</td><td style="padding: 10px 0; font-weight: 600; color: #2C2C2C;">${paid_at ? new Date(paid_at).toLocaleString('en-NG') : 'N/A'}</td></tr>
+    </table>
+    <div style="background: #FFF8E1; border-left: 4px solid #FFC107; padding: 16px; border-radius: 8px; margin-top: 20px;">
+      <p style="margin: 0; color: #6B6B6B; font-size: 14px;">⏰ <strong>Action Required:</strong> Please contact the customer within 24 hours to schedule their consultation.</p>
+    </div>
+  </div>
+</body>
+</html>`
+        });
+
+        console.log(`[WEBHOOK] ${timestamp} ✅ Consultation booking notification sent to Maryann`);
+    } catch (error) {
+        console.error(`[WEBHOOK] ${timestamp} ❌ Failed to send consultation booking notification:`, error);
+    }
+
+    // Send confirmation to customer
+    try {
+        if (customerEmail !== 'Unknown') {
+            console.log(`[WEBHOOK] ${timestamp} 📧 Sending consultation confirmation to: ${customerEmail}`);
+
+            await resend.emails.send({
+                from: 'Remabell Exquisite <orders@remabellexquisite.ng>',
+                to: customerEmail,
+                subject: `Your ${serviceName} is Confirmed! 🌟`,
+                html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f9f9f9; padding: 20px;">
+  <div style="background: white; border-radius: 12px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
+    <div style="text-align: center; margin-bottom: 24px;">
+      <h1 style="color: #2C5F5D; font-size: 22px; margin: 0 0 8px;">Booking Confirmed! ✨</h1>
+      <p style="color: #6B6B6B; margin: 0;">Thank you for booking with Remabell Exquisite</p>
+    </div>
+    <div style="background: #f0faf0; border-left: 4px solid #4CAF50; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+      <p style="margin: 0; color: #2C2C2C;"><strong>${serviceName}</strong> — ₦${price.toLocaleString('en-NG')}</p>
+    </div>
+    <p style="color: #6B6B6B; line-height: 1.6;">We've received your payment and our skincare expert will contact you within <strong>24 hours</strong> to schedule your consultation.</p>
+    <p style="color: #6B6B6B; line-height: 1.6;">Reference: <strong>${reference}</strong></p>
+    <div style="text-align: center; margin-top: 24px;">
+      <a href="https://wa.me/2349027064415" style="display: inline-block; padding: 14px 32px; background: #25D366; color: white; border-radius: 8px; text-decoration: none; font-weight: 600;">Contact Us on WhatsApp</a>
+    </div>
+    <p style="color: #C9B98F; text-align: center; margin-top: 24px; font-size: 14px; font-style: italic;">— Remabell Exquisite, Lagos' Premier Skincare Destination</p>
+  </div>
+</body>
+</html>`
+            });
+
+            console.log(`[WEBHOOK] ${timestamp} ✅ Customer consultation confirmation sent`);
+        }
+    } catch (error) {
+        console.error(`[WEBHOOK] ${timestamp} ❌ Failed to send customer consultation confirmation:`, error);
     }
 }
 
