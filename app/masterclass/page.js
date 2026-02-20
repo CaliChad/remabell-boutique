@@ -95,6 +95,13 @@ export default function MasterclassPage() {
                 },
                 onSuccess: (transaction) => {
                     setIsProcessing(false);
+                    // Snapchat Pixel: PURCHASE event for masterclass
+                    window.snaptr?.('track', 'PURCHASE', {
+                        price: 85000,
+                        currency: 'NGN',
+                        transaction_id: transaction.reference,
+                        item_category: 'masterclass'
+                    });
                     router.push(`/masterclass/success?reference=${transaction.reference}&email=${encodeURIComponent(email)}`);
                 },
                 onCancel: () => {
@@ -133,7 +140,7 @@ export default function MasterclassPage() {
         <div style={{ minHeight: '100vh', background: '#FAF8F5', fontFamily: "'Inter', sans-serif" }}>
             {/* Google Fonts */}
             <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-            
+
             {/* SEO Meta */}
             <title>Skincare Masterclass - Remabell Exquisite | Feb 26-28, 2026</title>
             <meta name="description" content="Learn professional skincare from Lagos' most trusted expert. 3-day intensive masterclass covering product selection, skin analysis, and business growth. Limited seats!" />
@@ -157,8 +164,8 @@ export default function MasterclassPage() {
 
                 <div style={{ position: 'relative', maxWidth: '800px', margin: '0 auto' }}>
                     {/* Logo */}
-                    <img 
-                        src="/masterclass-logo.jpg" 
+                    <img
+                        src="/masterclass-logo.jpg"
                         alt="Remabell's Skincare Master Class"
                         style={{
                             width: '100%',

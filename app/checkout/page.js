@@ -102,6 +102,18 @@ export default function CheckoutPage() {
             });
         }
 
+        // Snapchat Pixel: START_CHECKOUT event
+        const snapCartTotal = cartData.reduce((total, item) => {
+            const price = parseInt(item.price.replace(/[₦,]/g, '')) || 0;
+            return total + (price * item.quantity);
+        }, 0);
+        window.snaptr?.('track', 'START_CHECKOUT', {
+            price: snapCartTotal,
+            currency: 'NGN',
+            item_ids: cartData.map(i => String(i.id)),
+            number_items: cartData.length
+        });
+
         setLoading(false);
     }, [router]);
 
@@ -253,6 +265,15 @@ export default function CheckoutPage() {
                         content_type: 'product'
                     });
                 }
+
+                // Track Snapchat Pixel PURCHASE
+                window.snaptr?.('track', 'PURCHASE', {
+                    price: totalKobo / 100,
+                    currency: 'NGN',
+                    transaction_id: transaction.reference,
+                    item_ids: cart.map(i => String(i.id)),
+                    number_items: cart.length
+                });
 
                 // Clear cart and saved shipping
                 clearCart();

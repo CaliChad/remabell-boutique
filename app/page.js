@@ -86,6 +86,14 @@ export default function Home() {
         currency: 'NGN'
       });
     }
+    // Snapchat Pixel: ADD_CART event
+    const snapPrice = parseInt(p.price.replace(/[₦,]/g, '')) || 0;
+    window.snaptr?.('track', 'ADD_CART', {
+      price: snapPrice,
+      currency: 'NGN',
+      item_ids: [String(p.id)],
+      number_items: 1
+    });
   };
   const handleRemove = (id) => { removeFromCart(id); setCart(getCart()); setCartCount(getCartCount()); };
   const handleQty = (id, q) => { updateQuantity(id, q); setCart(getCart()); setCartCount(getCartCount()); };
