@@ -277,3 +277,29 @@ select {
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
 }
+
+/* Discount Banner Slide Down */
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Pulse Animation for Save Badge */
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}

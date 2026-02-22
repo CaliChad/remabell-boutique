@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { products, categories } from '../lib/products';
 import { getCart, addToCart, removeFromCart, updateQuantity, getCartCount, generateCartWhatsAppLink, generateProductWhatsAppLink } from '../lib/cart';
+import { isDiscountActive, getDiscountedPrice, getTimeRemaining, DISCOUNT_AMOUNT } from '../lib/discount';
 
 export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState('All Products');
@@ -18,6 +19,9 @@ export default function Home() {
   const [consultationModal, setConsultationModal] = useState(null);
   const [consultationEmail, setConsultationEmail] = useState('');
   const [consultationEmailError, setConsultationEmailError] = useState('');
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [countdown, setCountdown] = useState(getTimeRemaining());
+  const discountActive = isDiscountActive();
   const brands = ['The Ordinary', 'CeraVe', 'Neutrogena', 'La Roche-Posay', 'Clean & Clear'];
   const PRODUCTS_PER_LOAD = 24;
 
@@ -29,6 +33,15 @@ export default function Home() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Countdown timer for discount banner
+  useEffect(() => {
+    if (!discountActive) return;
+    const timer = setInterval(() => {
+      setCountdown(getTimeRemaining());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [discountActive]);
 
   // Load Paystack inline script
   useEffect(() => {
@@ -155,8 +168,27 @@ export default function Home() {
       {/* Google Fonts */}
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
+      {/* Discount Campaign Banner */}
+      {discountActive && !bannerDismissed && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, background: 'linear-gradient(135deg, #D4AF37, #C9B98F, #D4AF37)', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', flexWrap: 'wrap', boxShadow: '0 4px 20px rgba(212,175,55,0.3)', animation: 'slideDown 0.5s ease' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <span style={{ fontSize: '18px' }}>🔥</span>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: '#2C2C2C', letterSpacing: '0.02em' }}>LIMITED-TIME SALE — ₦500 OFF Every Product!</span>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {[{ val: countdown.days, label: 'd' }, { val: countdown.hours, label: 'h' }, { val: countdown.minutes, label: 'm' }, { val: countdown.seconds, label: 's' }].map((t, i) => (
+                <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                  <span style={{ background: '#2C2C2C', color: 'white', padding: '4px 6px', borderRadius: '4px', fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', minWidth: '28px', textAlign: 'center' }}>{String(t.val).padStart(2, '0')}</span>
+                  <span style={{ fontSize: '11px', color: '#2C2C2C', fontWeight: 600 }}>{t.label}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          <button onClick={() => setBannerDismissed(true)} style={{ background: 'rgba(0,0,0,0.15)', border: 'none', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#2C2C2C', fontSize: '16px', fontWeight: 700, lineHeight: 1 }} aria-label="Dismiss banner">✕</button>
+        </div>
+      )}
+
       {/* Header */}
-      <header style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50, background: 'rgba(250,248,245,0.95)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(201,185,143,0.2)' }}>
+      <header style={{ position: 'fixed', top: discountActive && !bannerDismissed ? '48px' : 0, left: 0, right: 0, zIndex: 50, background: 'rgba(250,248,245,0.95)', backdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(201,185,143,0.2)', transition: 'top 0.3s ease' }}>
         <nav style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '80px' }}>
           <a href="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
             <div style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg,#2C5F5D,#1F4A48)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(44,95,93,0.2)' }}>
@@ -271,7 +303,15 @@ export default function Home() {
               <div>
                 <p style={{ fontSize: '12px', color: '#C9B98F', textTransform: 'uppercase', letterSpacing: '0.15em', margin: '0 0 8px' }}>{selectedProduct.brand}</p>
                 <h2 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '28px', fontWeight: 600, color: '#2C2C2C', margin: '0 0 16px' }}>{selectedProduct.name}</h2>
-                <p style={{ fontSize: '24px', fontWeight: 700, color: '#2C5F5D', margin: '0 0 16px' }}>{selectedProduct.price}</p>
+                {discountActive ? (
+                  <div style={{ margin: '0 0 16px' }}>
+                    <p style={{ fontSize: '16px', color: '#999', textDecoration: 'line-through', margin: '0 0 4px' }}>{selectedProduct.price}</p>
+                    <p style={{ fontSize: '28px', fontWeight: 700, color: '#16A34A', margin: 0 }}>{getDiscountedPrice(selectedProduct.price)}</p>
+                    <p style={{ fontSize: '12px', color: '#EF4444', fontWeight: 600, margin: '4px 0 0' }}>🔥 You save ₦{DISCOUNT_AMOUNT.toLocaleString()}!</p>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '24px', fontWeight: 700, color: '#2C5F5D', margin: '0 0 16px' }}>{selectedProduct.price}</p>
+                )}
                 <p style={{ color: '#6B6B6B', marginBottom: '16px', lineHeight: 1.6 }}>{selectedProduct.description}</p>
                 <div style={{ marginBottom: '16px' }}><strong style={{ color: '#2C2C2C' }}>Benefits:</strong><p style={{ color: '#6B6B6B', margin: '4px 0 0' }}>{selectedProduct.benefits}</p></div>
                 <div style={{ marginBottom: '24px' }}><strong style={{ color: '#2C2C2C' }}>Skin Type:</strong><p style={{ color: '#6B6B6B', margin: '4px 0 0' }}>{selectedProduct.skinType}</p></div>
@@ -288,7 +328,7 @@ export default function Home() {
         </div>
       )}
 
-      <main style={{ paddingTop: '80px' }}>
+      <main style={{ paddingTop: discountActive && !bannerDismissed ? '128px' : '80px', transition: 'padding-top 0.3s ease' }}>
         {/* Hero */}
         <section style={{ background: 'linear-gradient(180deg,#FAF8F5 0%,#E8EDE8 100%)', padding: '64px 24px', textAlign: 'center' }}>
           <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -355,7 +395,12 @@ export default function Home() {
                 <div key={product.id} className="card-lift product-card" style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', border: '1px solid #F0F0F0', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', animation: index >= displayedCount - PRODUCTS_PER_LOAD && displayedCount > PRODUCTS_PER_LOAD ? 'productFadeIn 0.5s ease forwards' : 'none' }}>
                   <div className="group" style={{ position: 'relative', aspectRatio: '4/5', overflow: 'hidden', background: '#F8F6F3' }}>
                     <img src={product.image} alt={product.name} loading="lazy" className="img-zoom" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    <div style={{ position: 'absolute', top: '12px', left: '12px', background: 'linear-gradient(135deg,#C9B98F,#D4AF37)', color: 'white', fontSize: '10px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>✓ Original</div>
+                    <div style={{ position: 'absolute', top: '12px', left: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ background: 'linear-gradient(135deg,#C9B98F,#D4AF37)', color: 'white', fontSize: '10px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>✓ Original</div>
+                      {discountActive && (
+                        <div style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)', color: 'white', fontSize: '10px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', animation: 'pulse 2s infinite' }}>Save ₦{DISCOUNT_AMOUNT.toLocaleString()}</div>
+                      )}
+                    </div>
                     <button onClick={() => setSelectedProduct(product)} style={{ position: 'absolute', top: '12px', right: '12px', width: '36px', height: '36px', background: 'white', border: 'none', borderRadius: '50%', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.3s' }} className="group-hover:opacity-100">
                       <svg width="18" height="18" fill="none" stroke="#2C2C2C" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                     </button>
@@ -364,7 +409,14 @@ export default function Home() {
                     <p style={{ fontSize: '11px', color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '6px' }}>{product.brand}</p>
                     <h3 style={{ fontSize: '15px', fontWeight: 500, color: '#2C2C2C', marginBottom: '6px', lineHeight: 1.3 }}>{product.name}</h3>
                     <p style={{ fontSize: '12px', color: '#6B6B6B', marginBottom: '12px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{product.description}</p>
-                    <p style={{ fontSize: '16px', fontWeight: 700, color: '#2C5F5D', marginBottom: '16px' }}>{product.price}</p>
+                    {discountActive ? (
+                      <div style={{ marginBottom: '16px' }}>
+                        <p style={{ fontSize: '13px', color: '#999', textDecoration: 'line-through', margin: '0 0 2px' }}>{product.price}</p>
+                        <p style={{ fontSize: '18px', fontWeight: 700, color: '#16A34A', margin: 0 }}>{getDiscountedPrice(product.price)}</p>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '16px', fontWeight: 700, color: '#2C5F5D', marginBottom: '16px' }}>{product.price}</p>
+                    )}
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button onClick={() => handleAdd(product)} style={{ flex: 1, padding: '12px', background: 'white', border: '2px solid #2C5F5D', borderRadius: '8px', color: '#2C5F5D', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.3s' }}>Add to Cart</button>
                       <a href={generateProductWhatsAppLink(product)} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 16px', background: '#25D366', borderRadius: '8px' }}>

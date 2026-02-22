@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCart, clearCart } from '../../lib/cart';
-import { generateReference, calculateCartTotalKobo, formatAmount, validateEmail, validateNigerianPhone, hasVirtualProducts } from '../../lib/paystack';
+import { generateReference, calculateCartTotalKobo, calculateDiscountKobo, formatAmount, validateEmail, validateNigerianPhone, hasVirtualProducts } from '../../lib/paystack';
 import { createOrder, saveOrder, markOrderAsPaid } from '../../lib/orders';
+import { isDiscountActive, getDiscountedPrice, DISCOUNT_AMOUNT } from '../../lib/discount';
 import PaystackPopup from '../../components/PaystackPopup';
 
 // Location data arrays
@@ -163,14 +164,19 @@ export default function CheckoutPage() {
     const isOtherLocation = specificLocation.includes('Other');
 
     // Calculate totals
-    const subtotalKobo = calculateCartTotalKobo(cart);
+    const discountActive = isDiscountActive();
+    const subtotalKobo = calculateCartTotalKobo(cart); // Already discounted if active
+    const discountKobo = calculateDiscountKobo(cart);
+    const originalSubtotalKobo = subtotalKobo + discountKobo; // Original price total
     const shippingKobo = shippingFee * 100;
     const hasConsultations = hasVirtualProducts(cart);
     const hasPhysicalProducts = cart.some(item => !item.isVirtual);
 
     // Total includes shipping only for physical products
     const totalKobo = hasPhysicalProducts ? subtotalKobo + shippingKobo : subtotalKobo;
+    const originalSubtotalDisplay = formatAmount(originalSubtotalKobo);
     const subtotalDisplay = formatAmount(subtotalKobo);
+    const discountDisplay = discountKobo > 0 ? formatAmount(discountKobo) : null;
     const shippingDisplay = shippingFee > 0 ? formatAmount(shippingKobo) : null;
     const totalDisplay = formatAmount(totalKobo);
 
@@ -777,7 +783,14 @@ export default function CheckoutPage() {
                                         <p style={{ fontSize: '14px', fontWeight: 500, color: '#2C2C2C', marginBottom: '4px' }}>{item.name}</p>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <span style={{ fontSize: '13px', color: '#6B6B6B' }}>Qty: {item.quantity}</span>
-                                            <span style={{ fontSize: '14px', fontWeight: 600, color: '#2C5F5D' }}>{item.price}</span>
+                                            {discountActive ? (
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <span style={{ fontSize: '12px', color: '#999', textDecoration: 'line-through', marginRight: '6px' }}>{item.price}</span>
+                                                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#16A34A' }}>{getDiscountedPrice(item.price)}</span>
+                                                </div>
+                                            ) : (
+                                                <span style={{ fontSize: '14px', fontWeight: 600, color: '#2C5F5D' }}>{item.price}</span>
+                                            )}
                                         </div>
                                         {item.isVirtual && (
                                             <span style={{ display: 'inline-block', marginTop: '6px', padding: '2px 8px', background: '#2C5F5D20', color: '#2C5F5D', fontSize: '11px', fontWeight: 500, borderRadius: '4px' }}>
@@ -791,10 +804,29 @@ export default function CheckoutPage() {
 
                         {/* Summary Totals */}
                         <div style={{ borderTop: '1px solid #E8EDE8', paddingTop: '16px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                <span style={{ color: '#6B6B6B' }}>Items Subtotal</span>
-                                <span style={{ fontWeight: 500 }}>{subtotalDisplay}</span>
-                            </div>
+                            {discountActive && discountDisplay ? (
+                                <>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                        <span style={{ color: '#6B6B6B' }}>Items Subtotal</span>
+                                        <span style={{ fontWeight: 500, textDecoration: 'line-through', color: '#999' }}>{originalSubtotalDisplay}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
+                                        <span style={{ color: '#16A34A', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            🔥 Sale Discount
+                                        </span>
+                                        <span style={{ fontWeight: 600, color: '#16A34A' }}>-{discountDisplay}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                        <span style={{ color: '#6B6B6B' }}>After Discount</span>
+                                        <span style={{ fontWeight: 600, color: '#2C5F5D' }}>{subtotalDisplay}</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span style={{ color: '#6B6B6B' }}>Items Subtotal</span>
+                                    <span style={{ fontWeight: 500 }}>{subtotalDisplay}</span>
+                                </div>
+                            )}
 
                             {hasPhysicalProducts && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
@@ -877,10 +909,14 @@ export default function CheckoutPage() {
                                 shipping_fee: shippingFee,
                                 delivery_timeline: hasPhysicalProducts ? getDeliveryTimeline() : 'N/A',
                                 street_address: customer.address || 'N/A',
+                                discount_active: discountActive,
+                                discount_per_item: discountActive ? DISCOUNT_AMOUNT : 0,
+                                total_discount: discountActive ? discountKobo / 100 : 0,
                                 cart_items: JSON.stringify(cart.map(item => ({
                                     name: item.name,
                                     quantity: item.quantity,
-                                    price: item.price
+                                    price: item.price,
+                                    discounted_price: discountActive ? getDiscountedPrice(item.price) : item.price
                                 })))
                             }}
                             onSuccess={handlePaymentSuccess}

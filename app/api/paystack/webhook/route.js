@@ -291,6 +291,9 @@ async function handleRegularOrderPayment(data, timestamp) {
         deliveryLocation: metadata?.delivery_location,
         streetAddress: metadata?.street_address,
         shippingFee: metadata?.shipping_fee || 0,
+        discountActive: metadata?.discount_active || false,
+        discountPerItem: metadata?.discount_per_item || 0,
+        totalDiscount: metadata?.total_discount || 0,
         reference,
         paidAt: paid_at
     };
