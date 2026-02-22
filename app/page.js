@@ -20,7 +20,7 @@ export default function Home() {
   const [consultationEmail, setConsultationEmail] = useState('');
   const [consultationEmailError, setConsultationEmailError] = useState('');
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [countdown, setCountdown] = useState(getTimeRemaining());
+  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: false });
   const discountActive = isDiscountActive();
   const brands = ['The Ordinary', 'CeraVe', 'Neutrogena', 'La Roche-Posay', 'Clean & Clear'];
   const PRODUCTS_PER_LOAD = 24;
