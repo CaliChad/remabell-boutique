@@ -62,7 +62,7 @@ export default function Home() {
   const filtered = products.filter(p => {
     const matchCat = selectedCategory === 'All Products' || p.category === selectedCategory;
     const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.brand.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
+    return matchCat && matchSearch && !p.isVirtual;
   }).sort((a, b) => {
     const priceA = parseInt(a.price.replace(/[₦,]/g, ''));
     const priceB = parseInt(b.price.replace(/[₦,]/g, ''));
