@@ -88,7 +88,7 @@ export default function MasterclassPage() {
                 metadata: {
                     custom_fields: [
                         { display_name: "Product Type", variable_name: "product_type", value: "masterclass" },
-                        { display_name: "Class Dates", variable_name: "class_dates", value: "Feb 26-28, 2026" },
+                        { display_name: "Class Dates", variable_name: "class_dates", value: "March 15-19, 2026" },
                         { display_name: "Student Email", variable_name: "student_email", value: email },
                         { display_name: "Store", variable_name: "store", value: "Remabell Exquisite" }
                     ]
@@ -142,7 +142,7 @@ export default function MasterclassPage() {
             <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
             {/* SEO Meta */}
-            <title>Skincare Masterclass - Remabell Exquisite | Feb 26-28, 2026</title>
+            <title>Skincare Masterclass - Remabell Exquisite | March 15-19, 2026</title>
             <meta name="description" content="Learn professional skincare from Lagos' most trusted expert. 3-day intensive masterclass covering product selection, skin analysis, and business growth. Limited seats!" />
 
             {/* Hero Section */}
@@ -254,7 +254,7 @@ export default function MasterclassPage() {
                         color: '#78716C',
                         fontStyle: 'italic'
                     }}>
-                        February 26-28, 2026 | Limited Seats Available
+                        March 15-19, 2026 | Limited Seats Available
                     </p>
                 </div>
             </section>
@@ -571,7 +571,7 @@ export default function MasterclassPage() {
             }}>
                 <div>
                     <p style={{ fontWeight: 700, fontSize: '20px', color: '#059669', margin: 0 }}>₦85,000</p>
-                    <p style={{ fontSize: '12px', color: '#6B6B6B', margin: 0 }}>Feb 26-28, 2026</p>
+                    <p style={{ fontSize: '12px', color: '#6B6B6B', margin: 0 }}>March 15-19, 2026</p>
                 </div>
                 <button
                     onClick={handlePayment}
