@@ -702,6 +702,37 @@ export default function Home() {
           </div>
         </section>
 
+        {/* International Shipping Banner */}
+        <section style={{ padding: '48px 24px', background: 'linear-gradient(135deg, #1D4ED8 0%, #1E40AF 100%)' }}>
+          <div style={{ maxWidth: '1000px', margin: '0 auto', textAlign: 'center' }}>
+            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: '12px' }}>Worldwide Delivery</p>
+            <h2 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 'clamp(28px,5vw,38px)', fontWeight: 600, color: 'white', marginBottom: '12px' }}>🌍 We Ship Worldwide via DHL</h2>
+            <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.85)', maxWidth: '650px', margin: '0 auto 32px', lineHeight: 1.6 }}>
+              Order your favourite premium skincare from anywhere in the world. Pay for your products at checkout — we'll send your personalised shipping quote via WhatsApp within 24 hours.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+              {[
+                { flag: '🇬🇧', label: 'United Kingdom', rate: '₦75,000–₦370,000' },
+                { flag: '🇺🇸', label: 'USA & Canada', rate: '₦85,000–₦390,000' },
+                { flag: '🇪🇺', label: 'Europe', rate: '₦86,000–₦390,000' },
+                { flag: '🌐', label: 'Other Countries', rate: 'Quote on request' }
+              ].map((dest, i) => (
+                <div key={i} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '12px', padding: '20px', backdropFilter: 'blur(10px)' }}>
+                  <p style={{ fontSize: '28px', margin: '0 0 6px' }}>{dest.flag}</p>
+                  <p style={{ fontSize: '14px', fontWeight: 600, color: 'white', margin: '0 0 4px' }}>{dest.label}</p>
+                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', margin: 0 }}>{dest.rate}</p>
+                </div>
+              ))}
+            </div>
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', margin: '0 0 20px', fontStyle: 'italic' }}>
+              ✈️ DHL Express — 3-5 business days after shipping fee payment. Rates vary with package weight & exchange rates.
+            </p>
+            <a href="/checkout" style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', padding: '16px 36px', background: 'white', color: '#1D4ED8', borderRadius: '12px', fontSize: '15px', fontWeight: 700, textDecoration: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', transition: 'all 0.3s' }}>
+              🛒 Shop Now — We'll Handle The Rest
+            </a>
+          </div>
+        </section>
+
         {/* FAQ */}
         <section style={{ padding: '64px 24px', background: '#E8EDE8' }}>
           <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -709,7 +740,7 @@ export default function Home() {
             {[
               { q: 'Are all products 100% authentic?', a: 'Yes! Every product is sourced from authorized distributors and verified for authenticity. We are CAC registered and stand behind every item.' },
               { q: 'How long does delivery take?', a: 'Same-day delivery in Lagos, 2-3 days nationwide in Nigeria, and 5-7 days for international shipping. Pre-payment required for all orders.' },
-              { q: 'Do you ship internationally?', a: 'Yes, we ship worldwide! Contact us via WhatsApp for international shipping rates.' },
+              { q: 'Do you ship internationally?', a: 'Yes! We ship worldwide via DHL (3–5 business days after shipping fee payment). Shipping costs vary by destination and package weight. Rates: UK ₦75,000–₦370,000 | USA & Canada ₦85,000–₦390,000 | Europe ₦86,000–₦390,000 (subject to change with exchange rates). At checkout, select "International" — you\'ll only pay for products. We\'ll contact you within 24 hours via WhatsApp with your exact shipping quote and a payment link.' },
               { q: 'What payment methods do you accept?', a: 'We accept bank transfers and card payments. Payment must be completed before your order is dispatched. We do not offer cash on delivery (COD). Once you place your order via WhatsApp, we\'ll send you our secure payment details.' },
               { q: 'Do you offer payment on delivery?', a: 'No, we require secure pre-payment for all orders. This ensures faster processing and confirms your order. We accept bank transfers and card payments. Payment details will be sent via WhatsApp after you place your order.' },
               { q: 'Can I return products?', a: 'Yes, we have a return policy for unopened products within 7 days of delivery.' }

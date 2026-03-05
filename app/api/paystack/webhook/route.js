@@ -280,6 +280,9 @@ async function handleRegularOrderPayment(data, timestamp) {
         cartItems = [];
     }
 
+    // Detect international order
+    const isInternational = metadata?.international_order === true || metadata?.international_order === 'true';
+
     // Prepare order data for email templates
     const orderData = {
         customerName: metadata?.customer_name || customer?.first_name || 'Valued Customer',
@@ -295,7 +298,14 @@ async function handleRegularOrderPayment(data, timestamp) {
         discountPerItem: metadata?.discount_per_item || 0,
         totalDiscount: metadata?.total_discount || 0,
         reference,
-        paidAt: paid_at
+        paidAt: paid_at,
+        // International order fields
+        internationalOrder: isInternational,
+        destinationCountry: metadata?.destination_country,
+        intlCity: metadata?.intl_city,
+        intlState: metadata?.intl_state,
+        intlPostalCode: metadata?.intl_postal_code,
+        shippingStatus: metadata?.shipping_status
     };
 
     // Validate required fields before sending emails
@@ -308,10 +318,14 @@ async function handleRegularOrderPayment(data, timestamp) {
     try {
         console.log(`[WEBHOOK] ${timestamp} 📧 Sending order notification to Maryann...`);
 
+        const subjectPrefix = isInternational
+            ? `🌍 INTERNATIONAL ORDER - ${orderData.destinationCountry || 'Intl'} - ${orderData.customerName}`
+            : `🔥 New Order - ${orderData.customerName}`;
+
         const maryannEmail = await resend.emails.send({
             from: 'Remabell Exquisite <orders@remabellexquisite.ng>',
             to: MARYANN_EMAIL,
-            subject: `🔥 New Order - ${orderData.customerName} - ₦${orderData.orderTotal.toLocaleString('en-NG')}`,
+            subject: `${subjectPrefix} - ₦${orderData.orderTotal.toLocaleString('en-NG')}`,
             html: generateOrderNotificationEmail(orderData)
         });
 
@@ -325,10 +339,14 @@ async function handleRegularOrderPayment(data, timestamp) {
     try {
         console.log(`[WEBHOOK] ${timestamp} 📧 Sending confirmation to customer: ${orderData.customerEmail}`);
 
+        const customerSubject = isInternational
+            ? `Order Confirmed! We'll contact you shortly with your shipping quote ✨`
+            : `Order Confirmed! Your Remabell Glow is on the way ✨`;
+
         const customerEmail = await resend.emails.send({
             from: 'Remabell Exquisite <orders@remabellexquisite.ng>',
             to: orderData.customerEmail,
-            subject: `Order Confirmed! Your Remabell Glow is on the way ✨`,
+            subject: customerSubject,
             html: generateCustomerConfirmationEmail(orderData)
         });
 
@@ -338,6 +356,7 @@ async function handleRegularOrderPayment(data, timestamp) {
         // Maryann was already notified, so we can continue
     }
 }
+
 
 /**
  * Handle failed charge

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCart, clearCart } from '../../lib/cart';
+import { getCart, clearCart, INTERNATIONAL_COUNTRIES, INTERNATIONAL_RATE_RANGES, isInternationalShipping } from '../../lib/cart';
 import { generateReference, calculateCartTotalKobo, calculateDiscountKobo, formatAmount, validateEmail, validateNigerianPhone, hasVirtualProducts } from '../../lib/paystack';
 import { createOrder, saveOrder, markOrderAsPaid } from '../../lib/orders';
 import { isDiscountActive, getDiscountedPrice, DISCOUNT_AMOUNT } from '../../lib/discount';
@@ -35,7 +35,8 @@ const nigerianStates = [
 const SHIPPING_FEES = {
     'lagos-mainland': 4000,
     'lagos-island': 5000,
-    'outside-lagos': 7500
+    'outside-lagos': 7500,
+    'international': 0  // No shipping fee charged at checkout — quote sent via WhatsApp
 };
 
 export default function CheckoutPage() {
@@ -66,6 +67,15 @@ export default function CheckoutPage() {
     const [specificLocation, setSpecificLocation] = useState('');
     const [shippingFee, setShippingFee] = useState(0);
 
+    // International shipping state
+    const [intlCountry, setIntlCountry] = useState('');
+    const [intlAddress, setIntlAddress] = useState({
+        street: '',
+        city: '',
+        state: '',
+        postalCode: ''
+    });
+
     // Consultation date/time (for virtual products)
     const [consultationDateTime, setConsultationDateTime] = useState('');
 
@@ -82,12 +92,16 @@ export default function CheckoutPage() {
         // Restore saved shipping selections from localStorage
         const savedRegion = localStorage.getItem('remabell_shipping_region');
         const savedLocation = localStorage.getItem('remabell_shipping_location');
+        const savedIntlCountry = localStorage.getItem('remabell_intl_country');
         if (savedRegion) {
             setShippingRegion(savedRegion);
-            setShippingFee(SHIPPING_FEES[savedRegion] || 7500);
+            setShippingFee(SHIPPING_FEES[savedRegion] ?? 0);
         }
         if (savedLocation) {
             setSpecificLocation(savedLocation);
+        }
+        if (savedIntlCountry) {
+            setIntlCountry(savedIntlCountry);
         }
 
         // TikTok Pixel: InitiateCheckout event
@@ -122,14 +136,13 @@ export default function CheckoutPage() {
     const handleRegionChange = (region) => {
         setShippingRegion(region);
         setSpecificLocation(''); // Clear location when region changes
+        setIntlCountry('');     // Clear international country if changed away
         localStorage.setItem('remabell_shipping_region', region);
         localStorage.removeItem('remabell_shipping_location');
+        localStorage.removeItem('remabell_intl_country');
 
-        if (region) {
-            setShippingFee(SHIPPING_FEES[region] || 7500);
-        } else {
-            setShippingFee(0);
-        }
+        // International has no fee (quote sent later); others use preset rates
+        setShippingFee(SHIPPING_FEES[region] ?? 0);
 
         // Clear errors
         if (errors.shippingRegion) {
@@ -143,6 +156,24 @@ export default function CheckoutPage() {
         localStorage.setItem('remabell_shipping_location', location);
         if (errors.specificLocation) {
             setErrors(prev => ({ ...prev, specificLocation: '' }));
+        }
+    };
+
+    // Handle international country change
+    const handleIntlCountryChange = (country) => {
+        setIntlCountry(country);
+        localStorage.setItem('remabell_intl_country', country);
+        if (errors.intlCountry) {
+            setErrors(prev => ({ ...prev, intlCountry: '' }));
+        }
+    };
+
+    // Handle international address change
+    const handleIntlAddressChange = (e) => {
+        const { name, value } = e.target;
+        setIntlAddress(prev => ({ ...prev, [name]: value }));
+        if (errors[`intl_${name}`]) {
+            setErrors(prev => ({ ...prev, [`intl_${name}`]: '' }));
         }
     };
 
@@ -163,6 +194,9 @@ export default function CheckoutPage() {
     // Check if "Other" location is selected
     const isOtherLocation = specificLocation.includes('Other');
 
+    // Check if international shipping is selected
+    const isInternational = isInternationalShipping(shippingRegion);
+
     // Calculate totals
     const discountActive = isDiscountActive();
     const subtotalKobo = calculateCartTotalKobo(cart); // Already discounted if active
@@ -172,12 +206,13 @@ export default function CheckoutPage() {
     const hasConsultations = hasVirtualProducts(cart);
     const hasPhysicalProducts = cart.some(item => !item.isVirtual);
 
-    // Total includes shipping only for physical products
-    const totalKobo = hasPhysicalProducts ? subtotalKobo + shippingKobo : subtotalKobo;
+    // Total: for international orders, exclude shipping (quote sent separately)
+    // For domestic physical products, include shipping fee
+    const totalKobo = hasPhysicalProducts && !isInternational ? subtotalKobo + shippingKobo : subtotalKobo;
     const originalSubtotalDisplay = formatAmount(originalSubtotalKobo);
     const subtotalDisplay = formatAmount(subtotalKobo);
     const discountDisplay = discountKobo > 0 ? formatAmount(discountKobo) : null;
-    const shippingDisplay = shippingFee > 0 ? formatAmount(shippingKobo) : null;
+    const shippingDisplay = !isInternational && shippingFee > 0 ? formatAmount(shippingKobo) : null;
     const totalDisplay = formatAmount(totalKobo);
 
     // Get delivery timeline
@@ -201,8 +236,9 @@ export default function CheckoutPage() {
         }
         if (!customer.phone.trim()) {
             newErrors.phone = 'Phone number is required';
-        } else if (!validateNigerianPhone(customer.phone)) {
-            newErrors.phone = 'Please enter a valid Nigerian phone number';
+        } else if (!isInternational && !validateNigerianPhone(customer.phone)) {
+            // For international orders allow any phone format
+            newErrors.phone = 'Please enter a valid phone number (incl. country code)';
         }
 
         // Shipping validation for physical products
@@ -210,11 +246,19 @@ export default function CheckoutPage() {
             if (!shippingRegion) {
                 newErrors.shippingRegion = 'Please select your delivery region';
             }
-            if (shippingRegion && !specificLocation) {
-                newErrors.specificLocation = 'Please select your specific location';
-            }
-            if (!customer.address.trim()) {
-                newErrors.address = 'Street address is required for delivery';
+            if (isInternational) {
+                // Validate international fields
+                if (!intlCountry) newErrors.intlCountry = 'Please select your destination country';
+                if (!intlAddress.street.trim()) newErrors.intl_street = 'Street address is required';
+                if (!intlAddress.city.trim()) newErrors.intl_city = 'City is required';
+                if (!intlAddress.postalCode.trim()) newErrors.intl_postalCode = 'Postal/ZIP code is required';
+            } else {
+                if (shippingRegion && !specificLocation) {
+                    newErrors.specificLocation = 'Please select your specific location';
+                }
+                if (!customer.address.trim()) {
+                    newErrors.address = 'Street address is required for delivery';
+                }
             }
         }
 
@@ -285,6 +329,7 @@ export default function CheckoutPage() {
                 clearCart();
                 localStorage.removeItem('remabell_shipping_region');
                 localStorage.removeItem('remabell_shipping_location');
+                localStorage.removeItem('remabell_intl_country');
 
                 router.push(`/order-success?reference=${transaction.reference}`);
             } else {
@@ -333,12 +378,54 @@ export default function CheckoutPage() {
         return true;
     };
 
+    // Build Paystack metadata for international order
+    const buildPaystackMetadata = () => {
+        const base = {
+            customer_name: `${customer.firstName} ${customer.lastName}`,
+            phone: customer.phone,
+            items_count: cart.length,
+            shipping_region: shippingRegion || 'N/A',
+            delivery_location: specificLocation || 'N/A',
+            shipping_fee: shippingFee,
+            delivery_timeline: isInternational ? 'DHL 3-5 business days (after shipping payment)' : (hasPhysicalProducts ? getDeliveryTimeline() : 'N/A'),
+            street_address: isInternational ? intlAddress.street : (customer.address || 'N/A'),
+            discount_active: discountActive,
+            discount_per_item: discountActive ? DISCOUNT_AMOUNT : 0,
+            total_discount: discountActive ? discountKobo / 100 : 0,
+            cart_items: JSON.stringify(cart.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                discounted_price: discountActive ? getDiscountedPrice(item.price) : item.price
+            })))
+        };
+
+        if (isInternational) {
+            return {
+                ...base,
+                international_order: true,
+                destination_country: intlCountry,
+                intl_city: intlAddress.city,
+                intl_state: intlAddress.state,
+                intl_postal_code: intlAddress.postalCode,
+                shipping_status: 'quote_pending'
+            };
+        }
+
+        return base;
+    };
+
     // Check if form is complete for payment
     const isFormComplete = () => {
         if (!customer.email || !customer.firstName || !customer.lastName || !customer.phone) return false;
         if (hasPhysicalProducts) {
-            if (!shippingRegion || !specificLocation || !customer.address) return false;
-            if (isOtherLocation) return false;
+            if (!shippingRegion) return false;
+            if (isInternational) {
+                if (!intlCountry || !intlAddress.street || !intlAddress.city || !intlAddress.postalCode) return false;
+            } else {
+                if (!specificLocation || !customer.address) return false;
+                if (isOtherLocation) return false;
+            }
         }
         if (hasConsultations && !consultationDateTime) return false;
         return true;
@@ -632,15 +719,44 @@ export default function CheckoutPage() {
                                     <option value="lagos-mainland">Lagos Mainland (₦4,000)</option>
                                     <option value="lagos-island">Lagos Island (₦5,000)</option>
                                     <option value="outside-lagos">Outside Lagos (₦7,500)</option>
+                                    <option value="international">🌍 International / Outside Nigeria (Shipping quote required)</option>
                                 </select>
                                 {errors.shippingRegion && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.shippingRegion}</p>}
                                 <p style={{ fontSize: '12px', color: '#6B6B6B', marginTop: '8px' }}>
-                                    🚚 Mainland/Island: 1-2 days delivery • Outside Lagos: 3-5 days delivery
+                                    🚚 Mainland/Island: 1-2 days • Outside Lagos: 3-5 days • International: DHL 3-5 business days (after shipping payment)
                                 </p>
                             </div>
 
-                            {/* Specific Location Dropdown - Conditional */}
-                            {shippingRegion && (
+                            {/* International Shipping Notice */}
+                            {isInternational && (
+                                <div style={{
+                                    padding: '20px',
+                                    background: '#EFF6FF',
+                                    borderRadius: '12px',
+                                    border: '2px solid #1D4ED8',
+                                    marginBottom: '20px',
+                                    animation: 'fadeIn 0.3s ease'
+                                }}>
+                                    <p style={{ fontSize: '15px', fontWeight: 700, color: '#1E3A8A', margin: '0 0 10px' }}>
+                                        📦 INTERNATIONAL SHIPPING NOTICE
+                                    </p>
+                                    <p style={{ fontSize: '13px', color: '#1E40AF', margin: '0 0 10px', lineHeight: 1.6 }}>
+                                        Your order will be processed immediately, but shipping costs vary based on weight and destination. We'll contact you within <strong>24 hours via WhatsApp</strong> with your shipping quote.
+                                    </p>
+                                    <p style={{ fontSize: '12px', color: '#1E40AF', margin: '0 0 6px', fontWeight: 600 }}>Estimated shipping rates (DHL):</p>
+                                    <ul style={{ fontSize: '12px', color: '#1E40AF', margin: '0 0 10px', paddingLeft: '18px', lineHeight: 1.8 }}>
+                                        <li>🇬🇧 UK: ₦75,000–₦370,000</li>
+                                        <li>🇺🇸 USA / 🇨🇦 Canada: ₦85,000–₦390,000</li>
+                                        <li>🇪🇺 Europe: ₦86,000–₦390,000</li>
+                                    </ul>
+                                    <p style={{ fontSize: '11px', color: '#6B7280', margin: 0, fontStyle: 'italic' }}>
+                                        Rates depend on package weight and may vary with exchange rates. Delivery: 3-5 business days after shipping fee payment.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Specific Location Dropdown - Conditional (domestic only) */}
+                            {shippingRegion && !isInternational && (
                                 <div
                                     className={errors.specificLocation ? 'error-field' : ''}
                                     style={{
@@ -673,6 +789,98 @@ export default function CheckoutPage() {
                                         ))}
                                     </select>
                                     {errors.specificLocation && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.specificLocation}</p>}
+                                </div>
+                            )}
+
+                            {/* International Address Fields */}
+                            {isInternational && (
+                                <div style={{ marginBottom: '20px', animation: 'fadeIn 0.3s ease' }}>
+                                    {/* Country Selector */}
+                                    <div className={errors.intlCountry ? 'error-field' : ''} style={{ marginBottom: '16px' }}>
+                                        <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '8px' }}>
+                                            Destination Country *
+                                        </label>
+                                        <select
+                                            value={intlCountry}
+                                            onChange={(e) => handleIntlCountryChange(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '14px 16px',
+                                                border: errors.intlCountry ? '2px solid #EF4444' : '2px solid #E8EDE8',
+                                                borderRadius: '10px',
+                                                fontSize: '15px',
+                                                outline: 'none',
+                                                background: 'white',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            <option value="">-- Select destination country --</option>
+                                            {INTERNATIONAL_COUNTRIES.map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                        {errors.intlCountry && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.intlCountry}</p>}
+                                        {intlCountry && INTERNATIONAL_RATE_RANGES[intlCountry] && (
+                                            <p style={{ fontSize: '12px', color: '#1E40AF', marginTop: '6px', fontWeight: 500 }}>
+                                                💰 Estimated shipping: {INTERNATIONAL_RATE_RANGES[intlCountry]} (DHL, quote sent via WhatsApp)
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Street Address */}
+                                    <div className={errors.intl_street ? 'error-field' : ''} style={{ marginBottom: '12px' }}>
+                                        <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '6px' }}>Street Address *</label>
+                                        <input
+                                            type="text"
+                                            name="street"
+                                            value={intlAddress.street}
+                                            onChange={handleIntlAddressChange}
+                                            placeholder="House number, street name..."
+                                            style={{ width: '100%', padding: '13px 16px', border: errors.intl_street ? '2px solid #EF4444' : '2px solid #E8EDE8', borderRadius: '10px', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }}
+                                        />
+                                        {errors.intl_street && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.intl_street}</p>}
+                                    </div>
+
+                                    {/* City + State/Province row */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                                        <div className={errors.intl_city ? 'error-field' : ''}>
+                                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '6px' }}>City *</label>
+                                            <input
+                                                type="text"
+                                                name="city"
+                                                value={intlAddress.city}
+                                                onChange={handleIntlAddressChange}
+                                                placeholder="City"
+                                                style={{ width: '100%', padding: '13px 16px', border: errors.intl_city ? '2px solid #EF4444' : '2px solid #E8EDE8', borderRadius: '10px', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }}
+                                            />
+                                            {errors.intl_city && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.intl_city}</p>}
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '6px' }}>State / Province</label>
+                                            <input
+                                                type="text"
+                                                name="state"
+                                                value={intlAddress.state}
+                                                onChange={handleIntlAddressChange}
+                                                placeholder="State / Province"
+                                                style={{ width: '100%', padding: '13px 16px', border: '2px solid #E8EDE8', borderRadius: '10px', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Postal code */}
+                                    <div className={errors.intl_postalCode ? 'error-field' : ''}>
+                                        <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '6px' }}>Postal / ZIP Code *</label>
+                                        <input
+                                            type="text"
+                                            name="postalCode"
+                                            value={intlAddress.postalCode}
+                                            onChange={handleIntlAddressChange}
+                                            placeholder="e.g. SW1A 1AA or 10001"
+                                            style={{ width: '100%', padding: '13px 16px', border: errors.intl_postalCode ? '2px solid #EF4444' : '2px solid #E8EDE8', borderRadius: '10px', fontSize: '15px', outline: 'none', boxSizing: 'border-box' }}
+                                        />
+                                        {errors.intl_postalCode && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.intl_postalCode}</p>}
+                                    </div>
                                 </div>
                             )}
 
@@ -711,33 +919,35 @@ export default function CheckoutPage() {
                                 </div>
                             )}
 
-                            {/* Street Address */}
-                            <div className={errors.address ? 'error-field' : ''} style={{ marginBottom: '20px' }}>
-                                <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '8px' }}>
-                                    Street Address *
-                                </label>
-                                <textarea
-                                    name="address"
-                                    value={customer.address}
-                                    onChange={handleInputChange}
-                                    placeholder="House number, street name, landmarks..."
-                                    rows={3}
-                                    style={{
-                                        width: '100%',
-                                        padding: '14px 16px',
-                                        border: errors.address ? '2px solid #EF4444' : '2px solid #E8EDE8',
-                                        borderRadius: '12px',
-                                        fontSize: '15px',
-                                        outline: 'none',
-                                        resize: 'vertical',
-                                        fontFamily: 'inherit'
-                                    }}
-                                />
-                                {errors.address && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.address}</p>}
-                            </div>
+                            {/* Street Address (domestic only — international has its own fields above) */}
+                            {!isInternational && (
+                                <div className={errors.address ? 'error-field' : ''} style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#2C2C2C', marginBottom: '8px' }}>
+                                        Street Address *
+                                    </label>
+                                    <textarea
+                                        name="address"
+                                        value={customer.address}
+                                        onChange={handleInputChange}
+                                        placeholder="House number, street name, landmarks..."
+                                        rows={3}
+                                        style={{
+                                            width: '100%',
+                                            padding: '14px 16px',
+                                            border: errors.address ? '2px solid #EF4444' : '2px solid #E8EDE8',
+                                            borderRadius: '12px',
+                                            fontSize: '15px',
+                                            outline: 'none',
+                                            resize: 'vertical',
+                                            fontFamily: 'inherit'
+                                        }}
+                                    />
+                                    {errors.address && <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '4px' }}>{errors.address}</p>}
+                                </div>
+                            )}
 
                             {/* Delivery Fee Display */}
-                            {shippingRegion && !isOtherLocation && (
+                            {shippingRegion && !isOtherLocation && !isInternational && (
                                 <div style={{
                                     padding: '20px',
                                     background: '#F0F7F6',
@@ -757,6 +967,26 @@ export default function CheckoutPage() {
                                     <p style={{ fontSize: '20px', fontWeight: 700, color: '#2C5F5D', margin: 0 }}>
                                         ₦{shippingFee.toLocaleString('en-NG')}
                                     </p>
+                                </div>
+                            )}
+
+                            {/* International shipping fee notice */}
+                            {isInternational && (
+                                <div style={{
+                                    padding: '16px 20px',
+                                    background: '#EFF6FF',
+                                    borderRadius: '12px',
+                                    border: '2px solid #BFDBFE',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px'
+                                }}>
+                                    <span style={{ fontSize: '24px' }}>✈️</span>
+                                    <div>
+                                        <p style={{ fontSize: '14px', fontWeight: 600, color: '#1E3A8A', margin: 0 }}>International Shipping</p>
+                                        <p style={{ fontSize: '12px', color: '#1E40AF', margin: '2px 0 0' }}>Shipping cost: <strong>Quote sent via WhatsApp within 24 hours</strong></p>
+                                    </div>
+                                    <p style={{ fontSize: '15px', fontWeight: 700, color: '#1D4ED8', marginLeft: 'auto', margin: 0 }}>TBD</p>
                                 </div>
                             )}
                         </section>
@@ -831,9 +1061,11 @@ export default function CheckoutPage() {
                             {hasPhysicalProducts && (
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
                                     <span style={{ color: '#6B6B6B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                        🚚 Delivery
+                                        {isInternational ? '✈️' : '🚚'} {isInternational ? 'Shipping (Intl)' : 'Delivery'}
                                     </span>
-                                    {shippingDisplay ? (
+                                    {isInternational ? (
+                                        <span style={{ fontWeight: 600, color: '#1D4ED8', fontSize: '13px' }}>Quote via WhatsApp</span>
+                                    ) : shippingDisplay ? (
                                         <span style={{ fontWeight: 600, color: '#2C5F5D' }}>{shippingDisplay}</span>
                                     ) : (
                                         <span style={{ fontWeight: 500, color: '#9CA3AF', fontSize: '13px' }}>Select region above</span>
@@ -900,30 +1132,19 @@ export default function CheckoutPage() {
                             email={customer.email}
                             amount={totalKobo}
                             reference={reference}
-                            metadata={{
-                                customer_name: `${customer.firstName} ${customer.lastName}`,
-                                phone: customer.phone,
-                                items_count: cart.length,
-                                shipping_region: shippingRegion || 'N/A',
-                                delivery_location: specificLocation || 'N/A',
-                                shipping_fee: shippingFee,
-                                delivery_timeline: hasPhysicalProducts ? getDeliveryTimeline() : 'N/A',
-                                street_address: customer.address || 'N/A',
-                                discount_active: discountActive,
-                                discount_per_item: discountActive ? DISCOUNT_AMOUNT : 0,
-                                total_discount: discountActive ? discountKobo / 100 : 0,
-                                cart_items: JSON.stringify(cart.map(item => ({
-                                    name: item.name,
-                                    quantity: item.quantity,
-                                    price: item.price,
-                                    discounted_price: discountActive ? getDiscountedPrice(item.price) : item.price
-                                })))
-                            }}
+                            metadata={buildPaystackMetadata()}
                             onSuccess={handlePaymentSuccess}
                             onClose={handlePaymentClose}
                             disabled={processing || !isFormComplete() || isOtherLocation}
-                            buttonText={processing ? 'Processing...' : `Pay ${totalDisplay} Securely`}
+                            buttonText={processing ? 'Processing...' : `Pay ${totalDisplay}${isInternational ? ' (Products Only)' : ''} Securely`}
                         />
+
+                        {/* International info note under Pay button */}
+                        {isInternational && (
+                            <p style={{ fontSize: '12px', color: '#1E40AF', textAlign: 'center', marginTop: '12px', fontWeight: 500 }}>
+                                ℹ️ You are only charged for the products. Shipping will be quoted separately via WhatsApp.
+                            </p>
+                        )}
 
                         {/* Trust Badges */}
                         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '24px', marginTop: '24px', padding: '16px', background: '#F0F7F6', borderRadius: '12px' }}>
