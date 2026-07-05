@@ -36,6 +36,9 @@ Thumbs.db
 # Vercel
 .vercel
 
+# Claude Code local state
+.claude/worktrees/
+
 # Private keys
 *.pem
 
