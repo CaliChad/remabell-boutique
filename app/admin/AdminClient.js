@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-const CATEGORIES = ['Face', 'Body', 'Hair', 'Accessories', 'Uncategorized', 'Consultations'];
+// Same categories the shop filters by (see lib/products.js)
+const CATEGORIES = ['Face Creams', 'Serums', 'Cleansers & Toners', 'Soaps', 'Body Lotions & Milks', 'Body Oils',
+    'Shower Gels & Scrubs', 'Kids & Baby', 'Supplements & Teas', 'Knuckle & Spot Treatments', 'Hair Care', 'Consultations'];
 
 const EMPTY_FORM = {
     name: '',

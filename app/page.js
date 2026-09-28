@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { products, categories } from '../lib/products';
+import { products, categories, productSlug, slugify } from '../lib/products';
 import { getCart, addToCart, removeFromCart, updateQuantity, getCartCount, generateCartWhatsAppLink, generateProductWhatsAppLink } from '../lib/cart';
 import { isDiscountActive, getDiscountedPrice, getTimeRemaining, DISCOUNT_AMOUNT } from '../lib/discount';
 
@@ -10,7 +10,6 @@ export default function Home() {
   const [cart, setCart] = useState([]);
   const [cartCount, setCartCount] = useState(0);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
   const [brandIndex, setBrandIndex] = useState(0);
   const [displayedCount, setDisplayedCount] = useState(24);
   const [sortBy, setSortBy] = useState('featured');
@@ -26,6 +25,16 @@ export default function Home() {
   const PRODUCTS_PER_LOAD = 24;
 
   useEffect(() => { setCart(getCart()); setCartCount(getCartCount()); }, []);
+
+  // Open one category straight from a link, e.g. /?category=body-oils (handy for ads)
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get('category');
+    if (!wanted) return;
+    const match = categories.find(c => slugify(c) === wanted);
+    if (!match) return;
+    setSelectedCategory(match);
+    setTimeout(() => document.getElementById('products')?.scrollIntoView({ behavior: 'instant' }), 100);
+  }, []);
   useEffect(() => { const i = setInterval(() => setBrandIndex(p => (p + 1) % brands.length), 2500); return () => clearInterval(i); }, []);
   useEffect(() => { setDisplayedCount(24); }, [selectedCategory, searchQuery]);
   useEffect(() => {
@@ -71,6 +80,17 @@ export default function Home() {
     if (sortBy === 'brand') return a.brand.localeCompare(b.brand);
     return 0;
   });
+
+  // How many products sit in each category, for the filter buttons
+  const categoryCounts = products.reduce((acc, p) => {
+    if (!p.isVirtual) acc[p.category] = (acc[p.category] || 0) + 1;
+    return acc;
+  }, { 'All Products': products.filter(p => !p.isVirtual).length });
+
+  const selectCategory = (cat) => {
+    setSelectedCategory(cat);
+    document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const displayedProducts = filtered.slice(0, displayedCount);
   const hasMoreProducts = displayedCount < filtered.length;
@@ -292,42 +312,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Product Modal */}
-      {selectedProduct && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={() => setSelectedProduct(null)} />
-          <div style={{ position: 'relative', background: 'white', borderRadius: '16px', maxWidth: '700px', width: '100%', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 25px 60px rgba(0,0,0,0.2)' }}>
-            <button onClick={() => setSelectedProduct(null)} style={{ position: 'absolute', top: '16px', right: '16px', width: '40px', height: '40px', background: 'white', border: 'none', borderRadius: '50%', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg width="20" height="20" fill="none" stroke="#2C2C2C" strokeWidth="2" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg></button>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '24px', padding: '24px' }} className="md:grid-cols-2">
-              <img src={selectedProduct.image} alt={selectedProduct.name} style={{ width: '100%', borderRadius: '12px' }} />
-              <div>
-                <p style={{ fontSize: '12px', color: '#C9B98F', textTransform: 'uppercase', letterSpacing: '0.15em', margin: '0 0 8px' }}>{selectedProduct.brand}</p>
-                <h2 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '28px', fontWeight: 600, color: '#2C2C2C', margin: '0 0 16px' }}>{selectedProduct.name}</h2>
-                {discountActive ? (
-                  <div style={{ margin: '0 0 16px' }}>
-                    <p style={{ fontSize: '16px', color: '#999', textDecoration: 'line-through', margin: '0 0 4px' }}>{selectedProduct.price}</p>
-                    <p style={{ fontSize: '28px', fontWeight: 700, color: '#16A34A', margin: 0 }}>{getDiscountedPrice(selectedProduct.price)}</p>
-                    <p style={{ fontSize: '12px', color: '#EF4444', fontWeight: 600, margin: '4px 0 0' }}>🔥 You save ₦{DISCOUNT_AMOUNT.toLocaleString()}!</p>
-                  </div>
-                ) : (
-                  <p style={{ fontSize: '24px', fontWeight: 700, color: '#2C5F5D', margin: '0 0 16px' }}>{selectedProduct.price}</p>
-                )}
-                <p style={{ color: '#6B6B6B', marginBottom: '16px', lineHeight: 1.6 }}>{selectedProduct.description}</p>
-                <div style={{ marginBottom: '16px' }}><strong style={{ color: '#2C2C2C' }}>Benefits:</strong><p style={{ color: '#6B6B6B', margin: '4px 0 0' }}>{selectedProduct.benefits}</p></div>
-                <div style={{ marginBottom: '24px' }}><strong style={{ color: '#2C2C2C' }}>Skin Type:</strong><p style={{ color: '#6B6B6B', margin: '4px 0 0' }}>{selectedProduct.skinType}</p></div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <button onClick={() => { handleAdd(selectedProduct); setSelectedProduct(null); }} style={{ width: '100%', padding: '14px', background: '#2C5F5D', color: 'white', border: 'none', borderRadius: '12px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>Add to Cart</button>
-                  <a href={generateProductWhatsAppLink(selectedProduct)} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px', background: '#25D366', color: 'white', borderRadius: '12px', fontSize: '14px', fontWeight: 600, textDecoration: 'none' }}>
-                    <svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" /></svg>
-                    Order Now
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <main style={{ paddingTop: discountActive && !bannerDismissed ? '128px' : '80px', transition: 'padding-top 0.3s ease' }}>
         {/* Hero */}
         <section style={{ background: 'linear-gradient(180deg,#FAF8F5 0%,#E8EDE8 100%)', padding: '64px 24px', textAlign: 'center' }}>
@@ -342,10 +326,10 @@ export default function Home() {
               <svg style={{ position: 'absolute', left: '20px', top: '50%', transform: 'translateY(-50%)' }} width="20" height="20" fill="none" stroke="#C9B98F" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </div>
 
-            {/* Categories */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center', marginBottom: '24px' }}>
-              {['Cleansers', 'Serums', 'Moisturizers', 'Sunscreen', 'Body Care'].map(cat => (
-                <button key={cat} onClick={() => setSelectedCategory(cat.endsWith('s') ? cat.slice(0, -1) : cat)} style={{ padding: '10px 20px', background: '#E8EDE8', border: 'none', borderRadius: '24px', color: '#2C2C2C', fontSize: '13px', fontWeight: 500, cursor: 'pointer', transition: 'all 0.3s' }}>
+            {/* Shortcuts to the most popular categories */}
+            <div className="category-row" style={{ marginBottom: '24px' }}>
+              {['Face Creams', 'Serums', 'Body Lotions & Milks', 'Body Oils', 'Soaps', 'Cleansers & Toners'].map(cat => (
+                <button key={cat} onClick={() => selectCategory(cat)} style={{ padding: '10px 20px', background: '#E8EDE8', border: 'none', borderRadius: '24px', color: '#2C2C2C', fontSize: '13px', fontWeight: 500, cursor: 'pointer', transition: 'all 0.3s', whiteSpace: 'nowrap' }}>
                   {cat}
                 </button>
               ))}
@@ -374,10 +358,11 @@ export default function Home() {
 
             {/* Filters & Sort */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'center', alignItems: 'center', marginBottom: '32px' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+              <div className="category-row">
                 {categories.map(cat => (
-                  <button key={cat} onClick={() => setSelectedCategory(cat)} style={{ padding: '10px 20px', background: selectedCategory === cat ? '#2C5F5D' : 'white', color: selectedCategory === cat ? 'white' : '#2C5F5D', border: '2px solid #2C5F5D', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.3s' }}>
+                  <button key={cat} onClick={() => setSelectedCategory(cat)} style={{ padding: '10px 18px', background: selectedCategory === cat ? '#2C5F5D' : 'white', color: selectedCategory === cat ? 'white' : '#2C5F5D', border: '2px solid #2C5F5D', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.3s', whiteSpace: 'nowrap' }}>
                     {cat}
+                    {categoryCounts[cat] > 0 && <span style={{ marginLeft: '6px', opacity: 0.65, fontWeight: 500 }}>{categoryCounts[cat]}</span>}
                   </button>
                 ))}
               </div>
@@ -393,7 +378,7 @@ export default function Home() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: '24px' }}>
               {displayedProducts.map((product, index) => (
                 <div key={product.id} className="card-lift product-card" style={{ background: 'white', borderRadius: '12px', overflow: 'hidden', border: '1px solid #F0F0F0', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', animation: index >= displayedCount - PRODUCTS_PER_LOAD && displayedCount > PRODUCTS_PER_LOAD ? 'productFadeIn 0.5s ease forwards' : 'none' }}>
-                  <div className="group" style={{ position: 'relative', aspectRatio: '4/5', overflow: 'hidden', background: '#F8F6F3' }}>
+                  <a href={`/product/${productSlug(product)}`} className="group" style={{ display: 'block', position: 'relative', aspectRatio: '4/5', overflow: 'hidden', background: '#F8F6F3' }}>
                     <img src={product.image} alt={product.name} loading="lazy" className="img-zoom" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     <div style={{ position: 'absolute', top: '12px', left: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <div style={{ background: 'linear-gradient(135deg,#C9B98F,#D4AF37)', color: 'white', fontSize: '10px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>✓ Original</div>
@@ -401,13 +386,12 @@ export default function Home() {
                         <div style={{ background: 'linear-gradient(135deg, #EF4444, #DC2626)', color: 'white', fontSize: '10px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.05em', animation: 'pulse 2s infinite' }}>Save ₦{DISCOUNT_AMOUNT.toLocaleString()}</div>
                       )}
                     </div>
-                    <button onClick={() => setSelectedProduct(product)} style={{ position: 'absolute', top: '12px', right: '12px', width: '36px', height: '36px', background: 'white', border: 'none', borderRadius: '50%', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.3s' }} className="group-hover:opacity-100">
-                      <svg width="18" height="18" fill="none" stroke="#2C2C2C" strokeWidth="2" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                    </button>
-                  </div>
+                  </a>
                   <div style={{ padding: '20px' }}>
-                    <p style={{ fontSize: '11px', color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '6px' }}>{product.brand}</p>
-                    <h3 style={{ fontSize: '15px', fontWeight: 500, color: '#2C2C2C', marginBottom: '6px', lineHeight: 1.3 }}>{product.name}</h3>
+                    <p style={{ fontSize: '11px', color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '6px' }}>{product.category}</p>
+                    <h3 style={{ fontSize: '15px', fontWeight: 500, marginBottom: '6px', lineHeight: 1.3 }}>
+                      <a href={`/product/${productSlug(product)}`} style={{ color: '#2C2C2C', textDecoration: 'none' }}>{product.name}</a>
+                    </h3>
                     <p style={{ fontSize: '12px', color: '#6B6B6B', marginBottom: '12px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{product.description}</p>
                     {discountActive ? (
                       <div style={{ marginBottom: '16px' }}>

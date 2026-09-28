@@ -1,9 +1,19 @@
 import "./globals.css";
 import Script from "next/script";
 
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.remabellexquisite.ng").replace(/\/$/, "");
+
 export const metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Remabell Exquisite | 100% Original Skincare Lagos",
   description: "Top skincare vendor in Lagos, Nigeria. Worldwide shipping on original products.",
+  openGraph: {
+    title: "Remabell Exquisite | 100% Original Skincare Lagos",
+    description: "Top skincare vendor in Lagos, Nigeria. Worldwide shipping on original products.",
+    url: SITE_URL,
+    siteName: "Remabell Exquisite",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }) {

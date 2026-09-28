@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { readFile, writeFile } from 'fs/promises';
 import path from 'path';
 import { verifyRequestAuth } from '@/lib/adminAuth';
+import { slugify } from '@/lib/products';
 
 const PRODUCTS_FILE = path.join(process.cwd(), 'lib', 'products.js');
 
@@ -24,6 +25,16 @@ function buildNewContent(raw, updatedProducts) {
     const afterProducts = raw.slice(cutoff);
     const header = '// Product catalog\n// Currency: Nigerian Naira (₦)\n\nexport const products = ';
     return header + JSON.stringify(updatedProducts, null, 4) + ';\n' + afterProducts.trimStart();
+}
+
+// Each product keeps its own link text, so renaming a product later never breaks a link
+function uniqueSlug(name, products) {
+    const base = slugify(name) || `product-${Date.now()}`;
+    const taken = new Set(products.map(p => p.slug).filter(Boolean));
+    let slug = base;
+    let n = 2;
+    while (taken.has(slug)) slug = `${base}-${n++}`;
+    return slug;
 }
 
 function formatPrice(raw) {
@@ -77,6 +88,7 @@ export async function POST(request) {
         const newProduct = {
             id: newId,
             name: name.trim(),
+            slug: uniqueSlug(name.trim(), products),
             brand: body.brand || 'Generic',
             category: category || 'Uncategorized',
             description: description || name.trim(),

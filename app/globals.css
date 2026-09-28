@@ -303,3 +303,37 @@ select {
         opacity: 0.7;
     }
 }
+/* Category buttons: wrap on wide screens, swipe sideways on phones */
+.category-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+.category-row>button {
+    flex: 0 0 auto;
+}
+
+@media (max-width: 640px) {
+    .category-row {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        padding-bottom: 6px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .category-row::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+/* Product page: photo beside the details on wider screens */
+@media (min-width: 768px) {
+    .product-layout {
+        grid-template-columns: minmax(0, 460px) minmax(0, 1fr);
+        gap: 40px;
+    }
+}
